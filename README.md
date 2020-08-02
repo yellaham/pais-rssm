@@ -1,3 +1,4 @@
 # Particle Adaptive Importance Sampling for Regime-Switching State-Space Models
 
-## Summary: 
+## Summary
+This repository contains an implementation of a particle adaptive importance sampling (PAIS) method for the Bayesian analysis of regime-switching state-space models. The software implementation can be utilized to study general Bayesian models - all that is required is that the user supplies a method to compute unbiased estimates of the likelihood function. This particular software implementation focuses on regime-switching state-space models. 
