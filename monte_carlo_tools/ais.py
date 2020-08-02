@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.stats import multivariate_normal as mvn
 from monte_carlo_tools import psis
+import progressbar
 
 
 class Sampler:
@@ -61,8 +62,15 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, eta_mu0=1e-1, e
     start = 0
     startd = 0
 
+    # Initialize progress bar
+    print('***************************** Running sampler *****************************')
+    bar = progressbar.ProgressBar(maxval=iter_num,
+                                  widgets=[progressbar.Bar('*', '[', ']'), ' ', progressbar.Percentage(), '\t',
+                                           progressbar.Timer(),  ',\t', progressbar.ETA()])
+    bar.start()
+
     # Loop for the algorithm
-    for i in range(iter_num):
+    for i in bar(range(iter_num)):
         # Update start counter
         stop = start + samp_num
         stopd = startd + num_prop
@@ -105,7 +113,7 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, eta_mu0=1e-1, e
         evidence[i] = np.exp(log_z)
 
         # Print out stuff
-        print("ITER = %d, ESS = %.3f, K_HAT = %.3f, ELBO = %.3f, log_Z = %.5f" % (i+1, ess, kss, elbo, log_z))
+        #print("ITER = %d, ESS = %.3f, K_HAT = %.3f, ELBO = %.3f, log_Z = %.5f" % (i+1, ess, kss, elbo, log_z))
 
         # Compute estimate of the target mean
         target_mean[i] = np.average(particles[0:stop, :], axis=0, weights=weights)
@@ -133,8 +141,6 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, eta_mu0=1e-1, e
             # Normalize the weights
             wjn = wj / np.sum(wj)
             "COMPUTATION OF GRADIENTS"
-            # g_mu = (mu[j] - np.average(x_j, axis=0, weights=wjn))
-            # g_sig = (sig[j] - np.cov(x_j, rowvar=False, bias=True, aweights=wjn))
             # Compute the local ESS
             wjtn = wjn
             ESS = np.sum(wjtn**2)**(-1)
@@ -145,19 +151,22 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, eta_mu0=1e-1, e
                 wjt = np.exp(log_wjt -np.max(log_wjt))
                 wjtn = wjt/np.sum(wjt)
                 ESS = np.sum(wjtn**2)**(-1)
-            # g_sig = (sig[j] - np.cov(x_j, rowvar=False, bias=True, aweights=wjtn))
-            g_mu = np.zeros(d)
-            g_sig = np.zeros((d, d))
-            # Compute inverse of the covariance matrix
-            prec_j = np.linalg.inv(sig[j])
-            for n in range(np.shape(x_j)[0]):
-                # Compute ds_dmu and ds_dsig
-                ds_dmu = -(1/num_prop)*(w[n]**1)*q_ratio[n]*np.matmul((x_j[n] - mu[j]), prec_j)
-                ds_dsig = (0.5/num_prop)*(w[n]**1)*q_ratio[n]*(prec_j-np.dot(np.dot(prec_j,
-                                                                        np.outer(x_j[n]-mu[j], x_j[n]-mu[j])), prec_j))
-                # Compute gradients based on ds
-                g_mu = g_mu + wjn[n] * ds_dmu
-                g_sig = g_sig + wjtn[n] * ds_dsig
+            # Comptue the gradients
+            g_mu = (mu[j] - np.average(x_j, axis=0, weights=wjn))
+            g_sig = (sig[j] - np.cov(x_j, rowvar=False, bias=False, aweights=wjtn))
+            # # g_sig = (sig[j] - np.cov(x_j, rowvar=False, bias=True, aweights=wjtn))
+            # g_mu = np.zeros(d)
+            # g_sig = np.zeros((d, d))
+            # # Compute inverse of the covariance matrix
+            # prec_j = np.linalg.inv(sig[j])
+            # for n in range(np.shape(x_j)[0]):
+            #     # Compute ds_dmu and ds_dsig
+            #     ds_dmu = -(1/num_prop)*(w[n]**1)*q_ratio[n]*np.matmul((x_j[n] - mu[j]), prec_j)
+            #     ds_dsig = (0.5/num_prop)*(w[n]**1)*q_ratio[n]*(prec_j-np.dot(np.dot(prec_j,
+            #                                                             np.outer(x_j[n]-mu[j], x_j[n]-mu[j])), prec_j))
+            #     # Compute gradients based on ds
+            #     g_mu = g_mu + wjn[n] * ds_dmu
+            #     g_sig = g_sig + wjtn[n] * ds_dsig
             "CLIP THE GRADIENTS"
             if np.linalg.norm(g_mu) > g_mu_max:
                 g_mu = g_mu * (g_mu_max / np.linalg.norm(g_mu))
@@ -195,6 +204,9 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, eta_mu0=1e-1, e
         # Update start counters
         start = stop
         startd = stopd
+
+    # Finish progress bar
+    bar.finish()
 
     # Generate output
     return Sampler(particles, lws, means, covariances, evidence, target_mean)
