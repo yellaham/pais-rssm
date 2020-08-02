@@ -1,2 +1,3 @@
-# sssm
-Pseudomarginal importance sampling methods for analysis of regime-switching state-space models
+# Particle Adaptive Importance Sampling for Regime-Switching State-Space Models
+
+## Summary: 
