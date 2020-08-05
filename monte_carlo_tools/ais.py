@@ -1,8 +1,7 @@
 import numpy as np
 from scipy.stats import multivariate_normal as mvn
 from monte_carlo_tools import psis
-import progressbar
-
+from tqdm import tqdm
 
 class Sampler:
     """
@@ -65,14 +64,8 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, weight_scheme='
     start = 0
     startd = 0
 
-    # # Initialize progress bar
-    # print('***************************** Running sampler *****************************')
-    # bar = progressbar.ProgressBar(maxval=iter_num,
-    #                               widgets=[progressbar.Bar('*', '[', ']'), ' ', progressbar.Percentage(), '\t',
-    #                                        progressbar.Timer(),  ',\t', progressbar.ETA()])
-
     # Loop for the algorithm
-    for i in range(iter_num):
+    for i in tqdm(range(iter_num)):
         # Update start counter
         stop = start + samp_num
         stopd = startd + num_prop
@@ -115,9 +108,7 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, weight_scheme='
             log_weights[start:stop] = log_target_eval[start:stop] - log_prop
 
         # Smoothing of the importance weights (in log domain)
-        lws, kss = psis.psislw(log_weights[0:stop])
-        if ~weight_smoothing:
-            lws = log_weights[0:stop]
+        lws = log_weights[0:stop]
 
         # Compute evidence lower bound diagnostic
         elbo = np.mean(log_weights[0:stop])
@@ -133,9 +124,6 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, weight_scheme='
         # Estimate the evidence
         log_z = max_log_weight + np.log(np.mean(weights))
         evidence[i] = np.exp(log_z)
-
-        # Print out stuff
-        print("ITER = %d, ESS = %.3f, K_HAT = %.3f, ELBO = %.3f, Z_est = %.5f" % (i+1, ess, kss, elbo, evidence[i]))
 
         # Compute estimate of the target mean
         target_mean[i] = np.average(particles[0:stop, :], axis=0, weights=weights)
@@ -206,5 +194,31 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, weight_scheme='
         start = stop
         startd = stopd
 
+    # Print Khat diagnostic if doing weight smoothing
+    if weight_smoothing:
+        lws, kss = psis.psislw(log_weights[0:stop].astype('float128'))
+    else:
+        kss = np.nan
+    print("ESS = %.2f, K_HAT = %.3f, ELBO = %.5f, log_Z_est = %.5f, Z_est = %.5f" % (ess, kss, elbo, log_z,
+                                                                                     evidence[-1]))
+
     # Generate output
-    return Sampler(particles, lws, means, covariances, evidence, target_mean)
+    return Sampler(particles, lws.astype('float64'), means, covariances, evidence, target_mean)
+
+
+def importance_resampling(x, log_w, num_samp=1):
+    """
+    Performs importance resampling to extract unweighted samples from the referenced target distribution
+    :param x: Samples drawn from a distribution different from the target
+    :param log_w: Logarithm of the importance weights of the inputted samples
+    :param num_samp: Number of weighted samples to extract
+    :return x_tilde (unweighted samples)
+    """
+    # Obtain normalized weights
+    w = np.exp(log_w-np.max(log_w))
+    w_n = w/np.sum(w)
+    # Resample indicies of chosen particles
+    idx = np.random.choice(np.shape(x)[0], num_samp, replace=True, p=w_n)
+    # Obtained unweighted samples from referenced targer distribution
+    x_tilde = x[idx]
+    return x_tilde
