@@ -15,8 +15,16 @@ class SSM:
         self.transition_log_pdf = trn_pdf
         self.observation_rand = obs_rand
         self.observation_log_pdf = obs_pdf
-    # TODO: Create an attribute for synthetic data generation
-    #
+
+    def generate_data(self, init_state, T):
+        """
+        Generate synthetic data using the specified state-space model"
+        :param T: Length of the generated time-series
+        :return: observations [T][dim_y], latent_states [T+1][dim_x]
+        """
+        # TODO: Finalize attribute for synthetic data generation
+        #
+        return 0
 
 
 class MultiRegimeSSM:
@@ -29,14 +37,41 @@ class MultiRegimeSSM:
         self.regimes = regime_list
         self.switching_dynamics_rand = switch_rand
         self.switching_dynamics_lpdf = switch_lpdf
-    # TODO: Create an attribute for synthetic data generation
-    #
+
+    def generate_data(self, init_state, T):
+        """
+        Generate synthetic data using the specified state-space model"
+        :param T: Length of the generated time-series
+        :return: observations [T][dim_y], latent_states [T+1][dim_x], model_indexes = [T]
+        """
+        # Determine the dimension of the states
+        dim_x = np.shape(init_state)[0]
+        # Determine the dimension of the observations
+        dim_y = np.shape(self.regimes[0].observation_rand(init_state))[0]
+        # Allocate arrays for the outputs
+        observations = np.zeros((T, dim_y))
+        latent_states = np.zeros((T+1, dim_x))
+        model_indexes = np.zeros(T)
+        # Initialize the latent states
+        latent_states[0] = init_state
+        # Initialize empty list for model history
+        model_hist = []
+        # Generate the data in a loop
+        for t in range(T):
+            # Draw a model index
+            model_indexes[t] = self.switching_dynamics_rand[0](np.array(model_hist)).dtype(int)
+            # Draw a sample from the transition distribution (conditioned on the drawn model index)
+            latent_states[t+1] = self.regimes.transition_rand[model_indexes[t]](latent_states[t])
+            # Draw a sample from the observation distribution (conditioned on the drawn model index)
+            observations[t] = self.regimes[model_indexes[t]].observation_rand(init_state)
+
+        return observations, latent_states, model_indexes
 
 
 def brspf(data, regimes, x_init):
     """
     Implementation of the bootstrap regime switching particle filter
-    :param data: [dim_y][T] numpy array containing observations to be processed. Missing data is denoted by 'nan'.
+    :param data: [T][dim_y] numpy array containing observations to be processed. Missing data is denoted by 'nan'.
     :param regimes: object containing the candidate models for the regime switching
     :param x_init: [dim_x][N] Initial particles used for propagation, where N is the number of particles
     :return ...
