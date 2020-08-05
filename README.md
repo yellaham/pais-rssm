@@ -10,7 +10,7 @@ collected from a public database.
 
 
 ## Example 0: Multivariate Gaussian Target Distribution
-![alt text](https://github.com/adam-p/markdown-here/raw/master/src/common/images/icon48.png "Logo Title Text 1")
+![alt text](https://github.com/yellaham/pais-rssm/blob/master/figures/ex0_target_contour_plot.png "Logo Title Text 1")
 
 
 
