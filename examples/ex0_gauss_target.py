@@ -25,11 +25,12 @@ sig_init = np.tile(np.eye(dim), (D, 1, 1))                          # Use identi
 
 # Warm up the sampler by running it
 init_sampler = ais.ais(log_target=log_pi, d=dim, mu=mu_init, sig=sig_init, samp_per_prop=N_w, iter_num=I_w,
-                       weight_smoothing=False, eta_mu0=1, eta_sig0=0.01)
+                       temporal_weights=False, weight_smoothing=False, eta_mu0=1, eta_sig0=0.01)
 
 # Run sampler with initialized parameters
 output = ais.ais(log_target=log_pi, d=dim, mu=init_sampler.means[-D:], sig=init_sampler.covariances[-D:],
-                 samp_per_prop=N, iter_num=I, weight_smoothing=True, eta_mu0=0.1, eta_sig0=0.001)
+                 samp_per_prop=N, iter_num=I, weight_smoothing=False, temporal_weights=False, eta_mu0=0.1,
+                 eta_sig0=0.001)
 
 # Use sampling importance resampling to extract posterior samples
 theta = ais.importance_resampling(output.particles, output.log_weights, num_samp=1000)

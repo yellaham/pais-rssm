@@ -17,7 +17,7 @@ class Sampler:
         self.covariances = sig
 
 
-def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, weight_scheme='', weight_smoothing=False,
+def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weights=False, weight_smoothing=False,
         eta_mu0=1e-1, eta_sig0=1e-4, g_mu_max=1, g_sig_max=1):
     """
     Runs the adaptive population importance sampling algorithm
@@ -27,7 +27,7 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, weight_scheme='
     :param sig: [num_prop][d][d] array which stores the initial covariances of the proposal distributions
     :param samp_per_prop: Number of samples to draw per proposal distribution (DxN total samples drawn per iteration)
     :param iter_num: Number of iterations
-    :param weight_scheme: Weighting scheme used to compute the importance weights
+    :param temporal_weights: Boolean parameter for whether or not temporal deterministic mixture weights are used
     :param weight_smoothing: Boolean parameter for whether or not the importance weights are smoothed
     :param eta_mu0: learning rate for the means in the stochastic gradient updates
     :param eta_sig0: learning rate for the covariances in the stochastic gradient updates
@@ -81,7 +81,7 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, weight_scheme='
         log_target_eval[start:stop] = log_target(children)
 
         # Compute the importance weights according to the  weighting scheme
-        if weight_scheme == 'temporal':
+        if temporal_weights:
             # Compute log proposal
             prop_j = np.zeros((samp_num * (i + 1), num_prop * (i + 1)))
             log_prop_j = np.copy(prop_j)

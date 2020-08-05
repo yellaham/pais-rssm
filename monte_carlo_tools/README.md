@@ -5,7 +5,6 @@
 ### Stochastic Gradient Update Rules 
 
 ### Warm-up for Sampler
-Since stochastic gradient methods have a relatively slow convergence rate $$\mathcal{O}$$
 
 ### Temporal Deterministic Mixture Weights
 
