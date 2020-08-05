@@ -22,9 +22,22 @@ class SSM:
         :param T: Length of the generated time-series
         :return: observations [T][dim_y], latent_states [T+1][dim_x]
         """
-        # TODO: Finalize attribute for synthetic data generation
-        #
-        return 0
+        # Determine the dimension of the states
+        dim_x = np.shape(init_state)[0]
+        # Determine the dimension of the observations
+        dim_y = np.shape(self.observation_rand(init_state))[0]
+        # Allocate arrays for the outputs
+        observations = np.zeros((T, dim_y))
+        latent_states = np.zeros((T+1, dim_x))
+        # Initialize the latent states
+        latent_states[0] = init_state
+        # Generate the data in a loop
+        for t in range(T):
+            # Draw a sample from the transition distribution (conditioned on the drawn model index)
+            latent_states[t+1] = self.transition_rand(latent_states[t])
+            # Draw a sample from the observation distribution (conditioned on the drawn model index)
+            observations[t] = self.observation_rand(latent_states[t+1])
+        return observations, latent_states
 
 
 class MultiRegimeSSM:
@@ -69,45 +82,86 @@ class MultiRegimeSSM:
         return observations, latent_states, model_indexes
 
 
-def brspf(data, regimes, x_init):
+class RegimeSwitchingParticleFilter:
+    """
+    A class for outputs to regime-switching particle filters.
+    """
+    def __init__(self, x, m_idx, log_w):
+        self.particles = x
+        self.model_indexes = m_idx
+        self.log_weights = log_w
+
+
+def brspf(data, model, x_init):
     """
     Implementation of the bootstrap regime switching particle filter
     :param data: [T][dim_y] numpy array containing observations to be processed. Missing data is denoted by 'nan'.
-    :param regimes: object containing the candidate models for the regime switching
+    :param model: object containing the candidate models for the regime switching
     :param x_init: [dim_x][N] Initial particles used for propagation, where N is the number of particles
     :return ...
     """
     # Determine relevant dimensions
-    dim_y = np.shape(data)[0]   # Dimension of each observation vector
+    dim_y = np.shape(data)[1]   # Dimension of each observation vector
     dim_x = np.shape(x_init)[0]  # Dimension of each state vector
 
     # Determine the time horizon
-    T = np.shape(data)[1]
+    T = np.shape(data)[0]
 
     # Determine the number of particles in the algorithm
     N = np.shape(x_init)[1]
 
     # Determine the number of models
-    K = len(regimes)
+    K = len(model.regimes)
 
     # Memory allocation for numpy arrays
     x = np.zeros((T, dim_x, N))
-    m_idx = np.zeros((T, N))
+    m_idx = np.zeros((T, N), dtype='int')
+    log_w = np.zeros((T, N))
 
     for t in range(T):
-        # Step 1: Determine previous state
-        if t == 0:
+        # Step 1: Determine previous state and generate model indexes
+        if t != 0:
+            # Determine previous state
             x_old = x[t-1]
+            # Generate model indexes
+            m_idx[t] = model.switching_dynamics_rand(m_idx[:t-1], N)
         else:
+            # Determine previous state
             x_old = x_init
+            # Generate model indexes
+            m_idx[t] = model.switching_dynamics_rand(np.array([]), N)
 
-        # Step 2: Generate model indexes
-        m_idx[t] = regimes.switching_dynamics_rand(N)
-
-        # Step 3: Generate particles based on generated model indexes
+        # Step 2: Generate particles based on generated model indexes and compute log_likelihood
+        log_likelihood = np.zeros(N)
         for k in range(K):
-            print('help')
+            # Slicing indexes to determine which particles are aligned with model k
+            idx = (m_idx[t] == k)
+            # Draw particles from the kth transition distribution
+            children = model.regimes[k].transition_rand(x_old[:, idx]).T
+            # Store particles accordingly
+            x[t, :, idx] = children
+            # Compute log-likelihood and store accordingly
+            log_likelihood[idx] = model.regimes[k].observation_log_pdf(data[t], children).flatten()
 
-    return 0
+        # Step 3: Compute the importance weights (in log domain)
+        if t == 0:
+            log_w[t] = log_likelihood
+        else:
+            log_w[t] = log_w[t-1] + log_likelihood
+
+        # Step 4: Normalize the weights
+        w_t = np.exp(log_w[t]-np.max(log_w[t]))
+        w_t_n = w_t/np.sum(w_t)
+
+        # Step 5: Multinomial resampling to avoid particle degeneracy
+        idx_rs = np.random.choice(np.arange(0, N), N, replace=True, p=w_t_n)
+        x[t] = x[t, :, idx_rs].T
+        m_idx[t] = m_idx[t, idx_rs]
+
+        # Step 6: Correct the logarithm of the importance weights since full resampling is done
+        log_z_est = np.max(log_w[t]) + np.log(np.mean(w_t))
+        log_w[t] = np.ones(N)*log_z_est
+
+    return RegimeSwitchingParticleFilter(x, m_idx, log_w[t])
 
 
