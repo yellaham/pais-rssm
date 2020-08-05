@@ -10,6 +10,9 @@ collected from a public database.
 
 
 ## Example 0: Multivariate Gaussian Target Distribution
+The code related to this example under the "pais-rssm/examples/" directory. The following figure shows the approximated
+target distribution obtained from running the sampler:
+
 ![alt text](https://github.com/yellaham/pais-rssm/blob/master/figures/ex0_target_contour_plot.png "Logo Title Text 1")
 
 
