@@ -51,7 +51,7 @@ class MultiRegimeSSM:
         # Allocate arrays for the outputs
         observations = np.zeros((T, dim_y))
         latent_states = np.zeros((T+1, dim_x))
-        model_indexes = np.zeros(T)
+        model_indexes = np.zeros(T, dtype='int')
         # Initialize the latent states
         latent_states[0] = init_state
         # Initialize empty list for model history
@@ -59,11 +59,12 @@ class MultiRegimeSSM:
         # Generate the data in a loop
         for t in range(T):
             # Draw a model index
-            model_indexes[t] = self.switching_dynamics_rand[0](np.array(model_hist)).dtype(int)
+            model_indexes[t] = self.switching_dynamics_rand(model_hist, 1)
+            model_hist.append(model_indexes[t])
             # Draw a sample from the transition distribution (conditioned on the drawn model index)
-            latent_states[t+1] = self.regimes.transition_rand[model_indexes[t]](latent_states[t])
+            latent_states[t+1] = self.regimes[model_indexes[t]].transition_rand(latent_states[t])
             # Draw a sample from the observation distribution (conditioned on the drawn model index)
-            observations[t] = self.regimes[model_indexes[t]].observation_rand(init_state)
+            observations[t] = self.regimes[model_indexes[t]].observation_rand(latent_states[t+1])
 
         return observations, latent_states, model_indexes
 
