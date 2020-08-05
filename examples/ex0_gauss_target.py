@@ -23,7 +23,7 @@ D = 10    # number of proposals
 mu_init = np.random.uniform(low=-10, high=10, size=(D, dim))        # Initialize means on [-10,10]^dim hypercube
 sig_init = np.tile(np.eye(dim), (D, 1, 1))                          # Use identity covariance for all proposals
 
-# Warm up the sampler by running it
+# Warm up the sampler by running it for some number of iterations
 init_sampler = ais.ais(log_target=log_pi, d=dim, mu=mu_init, sig=sig_init, samp_per_prop=N_w, iter_num=I_w,
                        temporal_weights=False, weight_smoothing=False, eta_mu0=1, eta_sig0=0.01)
 
