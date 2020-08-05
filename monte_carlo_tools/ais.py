@@ -18,7 +18,8 @@ class Sampler:
         self.covariances = sig
 
 
-def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, eta_mu0=1e-1, eta_sig0=1e-4, g_mu_max=1, g_sig_max=1):
+def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, weight_scheme='', weight_smoothing=False,
+        eta_mu0=1e-1, eta_sig0=1e-4, g_mu_max=1, g_sig_max=1):
     """
     Runs the adaptive population importance sampling algorithm
     :param log_target: Logarithm of the target distribution
@@ -27,6 +28,8 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, eta_mu0=1e-1, e
     :param sig: [num_prop][d][d] array which stores the initial covariances of the proposal distributions
     :param samp_per_prop: Number of samples to draw per proposal distribution (DxN total samples drawn per iteration)
     :param iter_num: Number of iterations
+    :param weight_scheme: Weighting scheme used to compute the importance weights
+    :param weight_smoothing: Boolean parameter for whether or not the importance weights are smoothed
     :param eta_mu0: learning rate for the means in the stochastic gradient updates
     :param eta_sig0: learning rate for the covariances in the stochastic gradient updates
     :param g_mu_max: maximum value of the norm (L2) for the gradient w.r.t. the mean of each proposal
@@ -62,15 +65,14 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, eta_mu0=1e-1, e
     start = 0
     startd = 0
 
-    # Initialize progress bar
-    print('***************************** Running sampler *****************************')
-    bar = progressbar.ProgressBar(maxval=iter_num,
-                                  widgets=[progressbar.Bar('*', '[', ']'), ' ', progressbar.Percentage(), '\t',
-                                           progressbar.Timer(),  ',\t', progressbar.ETA()])
-    bar.start()
+    # # Initialize progress bar
+    # print('***************************** Running sampler *****************************')
+    # bar = progressbar.ProgressBar(maxval=iter_num,
+    #                               widgets=[progressbar.Bar('*', '[', ']'), ' ', progressbar.Percentage(), '\t',
+    #                                        progressbar.Timer(),  ',\t', progressbar.ETA()])
 
     # Loop for the algorithm
-    for i in bar(range(iter_num)):
+    for i in range(iter_num):
         # Update start counter
         stop = start + samp_num
         stopd = startd + num_prop
@@ -82,22 +84,42 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, eta_mu0=1e-1, e
             children[idx == j] = mu[j] + np.matmul(children[idx == j], np.linalg.cholesky(sig[j]).T)
         particles[start:stop] = children
 
-        # Compute log proposal
-        prop_j = np.zeros((samp_num * (i + 1), num_prop * (i + 1)))
-        log_prop_j = np.copy(prop_j)
-        prop = np.zeros(samp_num * (i + 1))
-        for j in range(num_prop * (i + 1)):
-            prop_j[:, j] = mvn.pdf(particles[0:stop], mean=means[j], cov=covariances[j], allow_singular=True)
-            log_prop_j[:, j] = mvn.logpdf(particles[0:stop], mean=means[j], cov=covariances[j], allow_singular=True)
-            prop += prop_j[:, j] / (num_prop * (i + 1))
-        log_prop = np.log(prop)
-
-        # Compute log weights and store
+        # Evaluate the the logarithm of the target distribution
         log_target_eval[start:stop] = log_target(children)
-        log_weights[0:stop] = log_target_eval[0:stop] - log_prop
+
+        # Compute the importance weights according to the  weighting scheme
+        if weight_scheme == 'temporal':
+            # Compute log proposal
+            prop_j = np.zeros((samp_num * (i + 1), num_prop * (i + 1)))
+            log_prop_j = np.copy(prop_j)
+            prop = np.zeros(samp_num * (i + 1))
+            for j in range(num_prop * (i + 1)):
+                prop_j[:, j] = mvn.pdf(particles[0:stop], mean=means[j], cov=covariances[j], allow_singular=True)
+                log_prop_j[:, j] = mvn.logpdf(particles[0:stop], mean=means[j], cov=covariances[j], allow_singular=True)
+                prop += prop_j[:, j] / (num_prop * (i + 1))
+            log_prop = np.log(prop)
+            # Compute the importance weights
+            log_weights[0:stop] = log_target_eval[0:stop] - log_prop
+        else:
+            # Compute log proposal
+            prop_j = np.zeros((samp_num, num_prop))
+            log_prop_j = np.copy(prop_j)
+            prop = np.zeros(samp_num)
+            for j in range(num_prop):
+                prop_j[:, j] = mvn.pdf(particles[start:stop], mean=mu[j], cov=sig[j], allow_singular=True)
+                log_prop_j[:, j] = mvn.logpdf(particles[start:stop], mean=mu[j], cov=sig[j],
+                                              allow_singular=True)
+                prop += prop_j[:, j]/num_prop
+            log_prop = np.log(prop)
+            # Compute the importance weights
+            log_weights[start:stop] = log_target_eval[start:stop] - log_prop
 
         # Smoothing of the importance weights (in log domain)
         lws, kss = psis.psislw(log_weights[0:stop])
+        if ~weight_smoothing:
+            lws = log_weights[0:stop]
+
+        # Compute evidence lower bound diagnostic
         elbo = np.mean(log_weights[0:stop])
 
         # Obtain the unnormalized importance weights
@@ -106,14 +128,14 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, eta_mu0=1e-1, e
 
         # Compute ESS
         weights_norm = weights / np.sum(weights)
-        ess = np.sum(weights_norm ** 2) ** (-1)
+        ess = np.sum(weights_norm**2)**(-1)
 
         # Estimate the evidence
-        log_z = np.log(1 / (samp_num * (i + 1))) + max_log_weight + np.log(np.sum(weights))
+        log_z = max_log_weight + np.log(np.mean(weights))
         evidence[i] = np.exp(log_z)
 
         # Print out stuff
-        #print("ITER = %d, ESS = %.3f, K_HAT = %.3f, ELBO = %.3f, log_Z = %.5f" % (i+1, ess, kss, elbo, log_z))
+        print("ITER = %d, ESS = %.3f, K_HAT = %.3f, ELBO = %.3f, Z_est = %.5f" % (i+1, ess, kss, elbo, evidence[i]))
 
         # Compute estimate of the target mean
         target_mean[i] = np.average(particles[0:stop, :], axis=0, weights=weights)
@@ -125,17 +147,9 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, eta_mu0=1e-1, e
             stop_j = start_j + samp_per_prop
             # Get local children
             x_j = particles[start_j:stop_j]
-            # Obtain the proposal ratio using the evaluate log weights
-            prop_dm = np.zeros(samp_per_prop)
-            for jj in range(num_prop):
-                prop_dm += (1/num_prop)*prop_j[start_j:stop_j, jj + num_prop*i]
-            q_ratio = prop_j[start_j:stop_j, j + num_prop*i]/prop_dm
-            # Compute DM weights
-            log_w = log_target_eval[start_j:stop_j]-np.log(prop_dm)
-            w = np.exp(log_w - np.max(log_w))
             # Obtain local log weights
-            log_wj = log_target_eval[start_j:stop_j] - log_prop_j[start_j:stop_j, j + num_prop*i]
-            # log_wj, temp = psis.psislw(log_wj)
+            log_wj = log_target_eval[start_j:stop_j] - mvn.logpdf(particles[start_j:stop_j], mean=mu[j],
+                                                                  cov=sig[j], allow_singular=True)
             # Convert to weights using LSE
             wj = np.exp(log_wj - np.max(log_wj))
             # Normalize the weights
@@ -146,33 +160,20 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, eta_mu0=1e-1, e
             ESS = np.sum(wjtn**2)**(-1)
             T_s = 1
             while ESS < np.round(0.1 * samp_per_prop):
-                T_s += 0.5
+                T_s += 1
                 log_wjt = (1/T_s)*log_wj
                 wjt = np.exp(log_wjt -np.max(log_wjt))
                 wjtn = wjt/np.sum(wjt)
                 ESS = np.sum(wjtn**2)**(-1)
-            # Comptue the gradients
+            # Compute the gradients (based on moment matching criteria)
             g_mu = (mu[j] - np.average(x_j, axis=0, weights=wjn))
             g_sig = (sig[j] - np.cov(x_j, rowvar=False, bias=False, aweights=wjtn))
-            # # g_sig = (sig[j] - np.cov(x_j, rowvar=False, bias=True, aweights=wjtn))
-            # g_mu = np.zeros(d)
-            # g_sig = np.zeros((d, d))
-            # # Compute inverse of the covariance matrix
-            # prec_j = np.linalg.inv(sig[j])
-            # for n in range(np.shape(x_j)[0]):
-            #     # Compute ds_dmu and ds_dsig
-            #     ds_dmu = -(1/num_prop)*(w[n]**1)*q_ratio[n]*np.matmul((x_j[n] - mu[j]), prec_j)
-            #     ds_dsig = (0.5/num_prop)*(w[n]**1)*q_ratio[n]*(prec_j-np.dot(np.dot(prec_j,
-            #                                                             np.outer(x_j[n]-mu[j], x_j[n]-mu[j])), prec_j))
-            #     # Compute gradients based on ds
-            #     g_mu = g_mu + wjn[n] * ds_dmu
-            #     g_sig = g_sig + wjtn[n] * ds_dsig
             "CLIP THE GRADIENTS"
             if np.linalg.norm(g_mu) > g_mu_max:
                 g_mu = g_mu * (g_mu_max / np.linalg.norm(g_mu))
             if np.linalg.norm(g_sig) > g_sig_max:
                 g_sig = g_sig * (g_sig_max / np.linalg.norm(g_sig))
-            " ADAPTATION OF MEAN AND PRECISION "
+            " ADAPTATION OF MEAN AND COVARIANCE MATRIX "
             # Compute the square of the gradient
             g_mu_sq = g_mu ** 2
             g_sig_sq = g_sig ** 2
@@ -204,9 +205,6 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, eta_mu0=1e-1, e
         # Update start counters
         start = stop
         startd = stopd
-
-    # Finish progress bar
-    bar.finish()
 
     # Generate output
     return Sampler(particles, lws, means, covariances, evidence, target_mean)
