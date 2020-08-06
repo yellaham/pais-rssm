@@ -16,7 +16,7 @@ The code related to each of the following examples is under the "pais-rssm/examp
 In the first example, we approximate a multivariate Gaussian distribution using the implemented AIS sampler in this
 repository. The following figure shows the approximated target distribution obtained from running the sampler:
 
-![alt text](https://github.com/yellaham/pais-rssm/blob/master/figures/ex0_target_contour_plot.png "KDE plot (Ex. 0)")
+![alt text](https://github.com/yellaham/pais-rssm/blob/master/figures/ex0_target_contour_plot.png "KDE Plot (Ex. 0)")
 
 
 ### Example 1: Switching Linear-Gaussian State-Space Model
