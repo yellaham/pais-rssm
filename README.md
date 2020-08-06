@@ -16,7 +16,7 @@ The code related to each of the following examples is under the "pais-rssm/examp
 In the first example, we approximate a multivariate Gaussian distribution using the implemented AIS sampler in this
 repository. The following figure shows the approximated target distribution obtained from running the sampler:
 
-![alt text](https://github.com/yellaham/pais-rssm/blob/master/figures/ex0_target_contour_plot.png "Logo Title Text 1")
+![alt text](https://github.com/yellaham/pais-rssm/blob/master/figures/ex0_target_contour_plot.png "KDE plot (Ex. 0)")
 
 
 ### Example 1: Switching Linear-Gaussian State-Space Model
@@ -24,9 +24,9 @@ In this example, our goal is to estimate the hidden states in a linear-Gaussian 
 of the state-space model can arbitrarily switch from time instant to the next. The following figure shows tracking of 
 the hidden state under model uncertainity:
 
-![alt text](https://github.com/yellaham/pais-rssm/blob/master/figures/ex1_tracking_performance.png "Logo Title Text 1")
+![alt text](https://github.com/yellaham/pais-rssm/blob/master/figures/ex1_tracking_performance.png "Tracking Performance (Ex. 1)")
 
 We can also plot the model selection performance to see how well the algorithm does in detecting which model is 
 represented at each time instant. 
 
-![alt text](https://github.com/yellaham/pais-rssm/blob/master/figures/ex1_model_selection_performance.png "Logo Title Text 1")
+![alt text](https://github.com/yellaham/pais-rssm/blob/master/figures/ex1_model_selection_performance.png "Model Detection (Ex. 1)")
