@@ -13,7 +13,7 @@ def linear_gaussian_log_pdf(x1, x2, slope, bias, err): return sp.norm.logpdf(x1,
 
 
 # Time length for the generated time-series
-time_length = 100
+time_length = 40
 
 # Different parameters for the candidate models
 a = [0.9, 0.9, 0.9]
@@ -46,13 +46,28 @@ plt.plot(np.arange(1, time_length+1), y)
 plt.show()
 
 # Run the Bootstrap regime switching filter to estimate the latent state trajectory
-num_particles = 250
+num_particles = 2000
 initial_particles = np.random.uniform(-0.5, 0.5, size=(1, num_particles))
 output = pf.brspf(y, model, initial_particles)
-print(np.sum(m_idx==sp.mode(output.model_indexes.T)[0].squeeze()))
 
 # Plot the tracking of the latent states
 plt.figure()
 plt.plot(np.arange(0, time_length+1), x)
 plt.plot(np.arange(1, time_length+1), np.mean(output.particles, axis=2))
+plt.title('Tracking Results', fontsize=20)
+plt.xlabel('t', fontsize=16)
+plt.ylabel('x(t)', fontsize=16)
+plt.legend(['Ground Truth', 'Estimate'])
+plt.show()
+
+
+# Plot the model selection accuracy
+plt.figure()
+plt.scatter(np.arange(1, time_length+1), m_idx, s=100)
+plt.scatter(np.arange(1, time_length+1), sp.mode(output.model_indexes.T)[0].squeeze(), s=40)
+plt.ylim([-0.5, 3])
+plt.title('Model Selection Performance', fontsize=20)
+plt.xlabel('t', fontsize=16)
+plt.ylabel('Model Index', fontsize=16)
+plt.legend(['Ground Truth', 'Detected Model'])
 plt.show()
