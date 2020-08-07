@@ -8,6 +8,10 @@ class Sampler:
     Class for adaptive importance sampling methods. The main attributes of the class are the particles (or samples) and
     their corresponding importance weights (transformed to the log domain).
     """
+    ## TODO: Include methods of this class which do the following:
+    #   - Method to compute an approximation of the evidence (unbiased)
+    #   - Method to compute an approximation of the target mean (consistent)
+    #   - Method to extract samples from the approximation to the target distribution
     def __init__(self, x, log_w, mu, sig, z_est, mu_est):
         self.particles = x
         self.log_weights = log_w

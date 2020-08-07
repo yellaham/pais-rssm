@@ -16,10 +16,9 @@ N = 50          # number of samples per proposal
 I = 400         # number of iterations
 N_w = 25        # number of samples per proposal (warm-up period)
 I_w = 500       # number of iterations (warm-up period)
+D = 10          # number of proposals
 
 # Generate the initial parameters
-D = 10    # number of proposals
-# Select initial proposal parameters
 mu_init = np.random.uniform(low=-10, high=10, size=(D, dim))        # Initialize means on [-10,10]^dim hypercube
 sig_init = np.tile(np.eye(dim), (D, 1, 1))                          # Use identity covariance for all proposals
 

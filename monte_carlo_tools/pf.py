@@ -90,6 +90,10 @@ class RegimeSwitchingParticleFilter:
         self.particles = x
         self.model_indexes = m_idx
         self.log_weights = log_w
+    ##  TODO: Write methods for this class which:
+    #       - Draw a sample from the approximation to the smoothing distribution
+    #       - Compute the minimum mean-square estimate of the states
+    #       - Compute the maximum a posteriori estimate of the model indexes
 
 
 def brspf(data, model, x_init):
@@ -140,6 +144,7 @@ def brspf(data, model, x_init):
             children = model.regimes[k].transition_rand(x_old[:, idx]).T
             # Store particles accordingly
             x[t, :, idx] = children
+            # TODO: Need to account for the fact that there can be missing data
             # Compute log-likelihood and store accordingly
             log_likelihood[idx] = model.regimes[k].observation_log_pdf(data[t], children).flatten()
 
