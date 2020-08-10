@@ -29,7 +29,7 @@ N_w = 25        # number of samples per proposal (warm-up period)
 I_w = 200       # number of iterations (warm-up period)
 D = 5           # number of proposals
 
-# Loop over the candidate models and approxiamte the model evidence for each
+# Loop over the candidate models and approximate the model evidence for each
 K = np.shape(df_candidates)[0]
 for k in range(K):
     # Create a lambda for the log_target

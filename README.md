@@ -30,3 +30,18 @@ We can also plot the model selection performance to see how well the algorithm d
 represented at each time instant. 
 
 ![alt text](https://github.com/yellaham/pais-rssm/blob/master/figures/ex1_model_selection_performance.png "Model Detection (Ex. 1)")
+
+
+### Example 2: Bayesian Model Selection 
+In this example, we perform Bayesian model selection by computing the posterior probability of a set of candidate models.
+The log-evidence of each model (i.e., log-likelihood of each model) is unbiasedly approximated by running AIS. We generate
+synthetic data from a Student-t distribution with Location=4 and DegreesOfFreedom=3. Candidate models are distinguished 
+by the DegreesOfFreedom they assume and each AIS sampler attempts to find the posterior distribution of the Location 
+parameter. The following figure shows the posterior probability of each model (assuming all models are equally likely
+a prior):
+
+![alt text](https://github.com/yellaham/pais-rssm/blob/master/figures/ex2_model_selection_dc_plus_noise.png "Model Posterior (Ex. 2)")
+
+This shows that we can detect the the generative model given enough observations. You will see that if you generate only 
+a small number of observations that the scheme will have difficult in determining the generative model. 
+
