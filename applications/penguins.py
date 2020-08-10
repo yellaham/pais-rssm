@@ -5,14 +5,14 @@ class AgeStructuredModel:
     A class which contains all necessary methods for analyzing an age-structured model for penguin colonies. Objects are
     initialized by the number of assumed adult stages and the demographic parameters.
     """
-    def __init__(self, psi_juv, psi_adu, alpha_r, beta_r, var_s, var_c, J=5):
+    def __init__(self, psi_juv, psi_adu, alpha_r, beta_r, var_s, var_c, nstage=5):
         self.juvenile_survival = psi_juv
         self.adult_survival = psi_adu
         self.reproductive_success_bias = alpha_r
         self.reproductive_success_slope = beta_r
         self.variance_adults = var_s
         self.variance_chicks = var_c
-        self.num_stages = J
+        self.num_stages = nstage
 
     def transition_rand(self, x_old):
         """
@@ -23,18 +23,18 @@ class AgeStructuredModel:
         :return an object with attributes S, Sb, C
         """
         # Figure out how many things we are propagating
-        N = np.shape(x_old)[0]
+        num_samples = np.shape(x_old)[0]
         # Set up matrix to output everything
-        x = np.zeros((N, 2*self.num_stages-2))
+        x = np.zeros((num_samples, 2*self.num_stages-2))
         # Compute the reproductive rate for each stage in logit space
         logit_mu = self.reproductive_success_bias+self.reproductive_success_slope*np.linspace(0, self.num_stages-1,
                                                                                               self.num_stages)
         # Obtain reproductive rate in real space by applying sigmoid transformation
         pr = 1./(1.+np.exp(logit_mu))
         # Compute the total number of chicks
-        Ct_old = np.sum(x_old[:, -self.num_stages:2], axis=1)
+        ct_old = np.sum(x_old[:, -self.num_stages:2], axis=1)
         # From total number of chicks to state 1 adults
-        x[:, 0] = np.array(np.random.binomial((Ct_old/2).astype(int), self.juvenile_survival)).flatten()
+        x[:, 0] = np.array(np.random.binomial((ct_old/2).astype(int), self.juvenile_survival)).flatten()
         # Remainder of cycle
         for j in range(self.num_stages-1):
             # Propagate adults first
