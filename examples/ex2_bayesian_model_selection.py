@@ -1,7 +1,6 @@
 import numpy as np
 import scipy.stats as sp
 import matplotlib.pyplot as plt
-import seaborn as sns
 from monte_carlo_tools import ais
 
 # Geerate synthetic data from a student-t with nu=3 degrees of freedom

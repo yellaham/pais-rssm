@@ -30,9 +30,9 @@ class AgeStructuredModel:
         logit_mu = self.reproductive_success_bias+self.reproductive_success_slope*np.linspace(0, self.num_stages-1,
                                                                                               self.num_stages)
         # Obtain reproductive rate in real space by applying sigmoid transformation
-        pr = 1./(1.+np.exp(logit_mu))
+        pr = 1./(1.+np.exp(-logit_mu))
         # Compute the total number of chicks
-        ct_old = np.sum(x_old[:, -self.num_stages:2], axis=1)
+        ct_old = np.sum(x_old[:, -(self.num_stages-2):], axis=1)
         # From total number of chicks to state 1 adults
         x[:, 0] = np.array(np.random.binomial((ct_old/2).astype(int), self.juvenile_survival)).flatten()
         # Remainder of cycle
@@ -45,7 +45,7 @@ class AgeStructuredModel:
             # Obtain the chicks for the penguins that can breed
             if j >= 1:
                 # Chicks obtained = binomial draw
-                x[:, -(self.num_stages+j-1)] = np.random.binomial(x[:, j+1].astype(int), pr[j-1]).flatten()
+                x[:, self.num_stages+j-1] = np.random.binomial(x[:, j+1].astype(int), pr[j-1]).flatten()
         return x
         ## TODO: We need to write the relevant methods of this class
         #   - Transition distribution (log pdf)
