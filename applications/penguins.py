@@ -26,27 +26,30 @@ class AgeStructuredModel:
             - x_old[:, -num_stages-2:] references the stage 1 to stage J-2 chicks
         :return x
         """
-        # Determine the number of samples
-        num_samples = np.shape(x_old)[0]
-        # Set up matrix to output everything
-        x = np.zeros((num_samples, 2*self.num_stages-2))
+        if len(np.shape(x_old)) == 1:
+            x = np.zeros(2*self.num_stages-2)
+        else:
+            # Determine the number of samples
+            num_samples = np.shape(x_old)[1]
+            # Set up matrix to output everything
+            x = np.zeros((2*self.num_stages-2, num_samples))
         # Obtain reproductive rate in real space by applying sigmoid transformation
         pr = self.reproductive_rates
         # Compute the total number of chicks
-        ct_old = np.sum(x_old[:, -(self.num_stages-2):], axis=1)
+        ct_old = np.sum(x_old[-(self.num_stages-2):], axis=0)
         # From total number of chicks to state 1 adults
-        x[:, 0] = np.array(np.random.binomial((ct_old/2).astype(int), self.juvenile_survival)).flatten()
+        x[0] = np.array(np.random.binomial((ct_old/2).astype(int), self.juvenile_survival)).flatten()
         # Remainder of cycle
         for j in range(self.num_stages-1):
             # Propagate adults first
             if j < self.num_stages-2:
-                x[:, j+1] = np.random.binomial(x_old[:, j].astype(int), self.adult_survival).flatten()
+                x[j+1] = np.random.binomial(x_old[j].astype(int), self.adult_survival)
             else:
-                x[:, j+1] = np.random.binomial((x_old[:, j] + x_old[:, j+1]).astype(int), self.adult_survival).flatten()
+                x[j+1] = np.random.binomial((x_old[j] + x_old[j+1]).astype(int), self.adult_survival)
             # Obtain the chicks for the penguins that can breed
             if j >= 1:
                 # Chicks obtained = binomial draw
-                x[:, self.num_stages+j-1] = np.random.binomial(2*x[:, j+1].astype(int), pr[j-1]).flatten()
+                x[self.num_stages+j-1] = np.random.binomial(2*x[j+1].astype(int), pr[j-1])
         return x
 
     def transition_log_pdf(self, x, x_old):
@@ -57,25 +60,27 @@ class AgeStructuredModel:
             - x[:, -num_stages-2:] references the stage 1 to stage J-2 chicks
         :return logarithm of the transition distribution
         """
-        # Determine the number of samples
-        num_samples = np.shape(x)[0]
-        # Allocate array to story the evaluations of the transition distribution
-        log_transition = np.zeros(num_samples)
+        if len(np.shape(x_old)) == 1:
+            x = np.zeros(2*self.num_stages-2)
+            log_transition = np.zeros(1)
+        else:
+            # Determine the number of samples
+            num_samples = np.shape(x_old)[1]
+            log_transition = np.zeros(num_samples)
         # Compute the total number of chicks
-        ct_old = np.sum(x_old[:, -(self.num_stages-2):], axis=1)
+        ct_old = np.sum(x_old[-(self.num_stages-2):], axis=0)
         # From total number of chicks to state 1 adults
-        log_transition += sp.binom.logpmf(x[:, 0], ct_old, p=self.juvenile_survival)
+        log_transition += sp.binom.logpmf(x[0], ct_old, p=self.juvenile_survival)
         # Remainder of cycle
         for j in range(self.num_stages-1):
             # Propagate adults first
             if j < self.num_stages-2:
-                log_transition += sp.binom.logpmf(x[:, j+1], x_old[:, j].astype(int), p=self.adult_survival)
+                log_transition += sp.binom.logpmf(x[j+1], x_old[j].astype(int), p=self.adult_survival)
             else:
-                log_transition += sp.binom.logpmf(x[:, j+1], (x_old[:, j] + x_old[:, j+1]).astype(int),
-                                                  p=self.adult_survival)
+                log_transition += sp.binom.logpmf(x[j+1], (x_old[j] + x_old[j+1]).astype(int), p=self.adult_survival)
             # Obtain the chicks for the penguins that can breed
             if j >= 1:
-                log_transition += sp.binom.logpmf(x[:, self.num_stages+j-1], 2*x[:, j+1].astype(int),
+                log_transition += sp.binom.logpmf(x[self.num_stages+j-1], 2*x[j+1].astype(int),
                                                   p=self.reproductive_rates[j-1])
         return log_transition
 
@@ -88,17 +93,19 @@ class AgeStructuredModel:
         :return observed number of total breeders and observed number of total chicks
         NOTE: Need to keep in mind that I can have numerical errors due to the dimension of the array being used
         """
-        # Determine the number of samples
-        num_samples = np.shape(x)[0]
-        # Allocate array for sample generation
-        y = np.zeros((num_samples, 2))
+        # Determine the number of samples and allocate array for sample generation
+        if len(np.shape(x)) == 1:
+            y = np.zeros(2)
+        else:
+            num_samples = np.shape(x)[1]
+            y = np.zeros((2, num_samples))
         # Extract the total number of breeders and chicks
-        st = np.sum(x[:, self.num_stages:], axis=1)         # total number of breeders
-        ct = np.sum(x[:, -(self.num_stages-2):], axis=1)    # total number of chicks
+        st = np.sum(x[self.num_stages:], axis=0)         # total number of breeders
+        ct = np.sum(x[-(self.num_stages-2):], axis=0)    # total number of chicks
         # Generate observations
-        y[:, 0] = np.random.normal(loc=st, scale=np.sqrt(self.variance_adults)*st).astype(int)
-        y[:, 1] = np.random.normal(loc=ct, scale=np.sqrt(self.variance_chicks)*ct).astype(int)
-        return y
+        y[0] = np.random.normal(loc=st, scale=np.sqrt(self.variance_adults)*st)
+        y[1] = np.random.normal(loc=ct, scale=np.sqrt(self.variance_chicks)*ct)
+        return y.astype(int)
 
     def obsevation_log_pdf(self, y, x):
         """
@@ -109,14 +116,16 @@ class AgeStructuredModel:
             - x[:, -num_stages-2:] references the stage 1 to stage J-2 chicks
         :return logarithm of the observation distribution
         """
-        # Determine the number of samples
-        num_samples = np.shape(x)[0]
-        # Allocate array for sample generation
-        log_observation = np.zeros(num_samples)
+        # Determine the number of samples and allocate array for sample generation
+        if len(np.shape(x)) == 1:
+            log_observation = np.zeros(1)
+        else:
+            num_samples = np.shape(x)[1]
+            log_observation = np.zeros(num_samples)
         # Extract the total number of breeders and chicks
-        st = np.sum(x[:, self.num_stages:], axis=1)  # total number of breeders
-        ct = np.sum(x[:, -(self.num_stages - 2):], axis=1)  # total number of chicks
+        st = np.sum(x[self.num_stages:], axis=0)            # total number of breeders
+        ct = np.sum(x[-(self.num_stages - 2):], axis=0)     # total number of chicks
         # Generate observations
-        log_observation += sp.norm.logpdf(y[:, 0], loc=st, scale=np.sqrt(self.variance_adults) * st)
-        log_observation += sp.norm.logpdf(y[:, 1], loc=ct, scale=np.sqrt(self.variance_chicks) * ct)
+        log_observation += sp.norm.logpdf(y[0], loc=st, scale=np.sqrt(self.variance_adults)*st)
+        log_observation += sp.norm.logpdf(y[1], loc=ct, scale=np.sqrt(self.variance_chicks)*ct)
         return log_observation
