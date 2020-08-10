@@ -107,7 +107,7 @@ class AgeStructuredModel:
         y[1] = np.random.normal(loc=ct, scale=np.sqrt(self.variance_chicks)*ct)
         return y.astype(int)
 
-    def obsevation_log_pdf(self, y, x):
+    def observation_log_pdf(self, y, x):
         """
         Evaluate the logarithm of the observation distribution
         :param y Observed total breeders and total chciks

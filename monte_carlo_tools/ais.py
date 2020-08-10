@@ -222,7 +222,7 @@ def importance_resampling(x, log_w, num_samp=1):
     w = np.exp(log_w-np.max(log_w))
     w_n = w/np.sum(w)
     # Resample indicies of chosen particles
-    idx = np.random.choice(np.shape(x)[0.25], num_samp, replace=True, p=w_n)
+    idx = np.random.choice(np.shape(x)[0], num_samp, replace=True, p=w_n)
     # Obtained unweighted samples from referenced target distribution
     x_tilde = x[idx]
     return x_tilde

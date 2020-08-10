@@ -1,5 +1,5 @@
 import numpy as np
-
+import scipy.stats as sp
 
 class SSM:
     """
@@ -90,10 +90,24 @@ class RegimeSwitchingParticleFilter:
         self.particles = x
         self.model_indexes = m_idx
         self.log_weights = log_w
-    ##  TODO: Write methods for this class which:
-    #       - Draw a sample from the approximation to the smoothing distribution
-    #       - Compute the minimum mean-square estimate of the states
-    #       - Compute the maximum a posteriori estimate of the model indexes
+        # Compute the normalized weights
+        weights = np.exp(self.log_weights[-1]-np.max(self.log_weights[-1]))
+        self.normalized_weights = weights/np.sum(weights)
+        # Estimate the states
+        self.state_estimates = np.average(x, axis=2)
+        # Estimate the trajectory of models
+        self.model_estimates = sp.mode(m_idx.T)[0].squeeze()
+        # Compute an estimate of the marginal likelihood
+        max_log_w = np.array([np.max(log_w, axis=1)]).T
+        self.log_evidence = np.sum(np.log(np.mean(np.exp(log_w-max_log_w), axis=1))+max_log_w.squeeze())
+
+    def generate_state_trajectory(self, num_samples=1):
+        # Multinomial resampling according to normalized weights of particle streams
+        idx = np.random.choice(np.shape(self.particles)[2], num_samples, replace=True, p=self.normalized_weights)
+        # Obtained unweighted samples from referenced target distribution
+        x_sample = self.particles[:, :, idx]
+        m_sample = self.model_indexes[:, idx]
+        return x_sample, m_sample
 
 
 def brspf(data, model, x_init):
@@ -141,9 +155,9 @@ def brspf(data, model, x_init):
             # Slicing indexes to determine which particles are aligned with model k
             idx = (m_idx[t] == k)
             # Draw particles from the kth transition distribution
-            children = model.regimes[k].transition_rand(x_old[:, idx]).T
+            children = model.regimes[k].transition_rand(x_old[:, idx])
             # Store particles accordingly
-            x[t, :, idx] = children
+            x[t, :, idx] = children.T
             # TODO: Need to account for the fact that there can be missing data
             # Compute log-likelihood and store accordingly
             log_likelihood[idx] = model.regimes[k].observation_log_pdf(data[t], children).flatten()
@@ -167,6 +181,6 @@ def brspf(data, model, x_init):
         log_z_est = np.max(log_w[t]) + np.log(np.mean(w_t))
         log_w[t] = np.ones(N)*log_z_est
 
-    return RegimeSwitchingParticleFilter(x, m_idx, log_w[t])
+    return RegimeSwitchingParticleFilter(x, m_idx, log_w)
 
 
