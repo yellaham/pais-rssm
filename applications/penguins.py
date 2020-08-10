@@ -21,10 +21,10 @@ class AgeStructuredModel:
     def transition_rand(self, x_old):
         """
         Propagates penguin populations from previous year using stage-structured dynamics.
-        :param x_old:
-            - x[:, :J] indicate the stage 1 to stage J adult penguins
-            - x[:, -J-2:] indicate the stage 1 to stage J-2 chicks
-        :return an object with attributes S, Sb, C
+        :param x_old: Latent penguin populations from the previous year
+            - x_old[:, :num_stages] references the stage 1 to stage J adult penguins
+            - x_old[:, -num_stages-2:] references the stage 1 to stage J-2 chicks
+        :return x
         """
         # Determine the number of samples
         num_samples = np.shape(x_old)[0]
@@ -50,6 +50,13 @@ class AgeStructuredModel:
         return x
 
     def transition_log_pdf(self, x, x_old):
+        """
+        Evaluate the logarithm of the transition distribution for the age-structured penguin model.
+        :param x, x_old: Latent penguin populations (current year and previous year)
+            - x[:, :num_stages] references the stage 1 to stage J adult penguins
+            - x[:, -num_stages-2:] references the stage 1 to stage J-2 chicks
+        :return logarithm of the transition distribution
+        """
         # Determine the number of samples
         num_samples = np.shape(x)[0]
         # Allocate array to story the evaluations of the transition distribution
@@ -72,7 +79,44 @@ class AgeStructuredModel:
                                                   p=self.reproductive_rates[j-1])
         return log_transition
 
-        ## TODO: We need to write the relevant methods of this class
-        #   - Transition distribution (log pdf)
-        #   - Observation distribution (random number generator)
-        #   - Observation distribution (log pdf)
+    def observation_rand(self, x):
+        """
+        Generates noisy observations for latent penguin populations
+        :param x: Latent penguin populations of the current year
+            - x[:, :num_stages] references the stage 1 to stage J adult penguins
+            - x[:, -num_stages-2:] references the stage 1 to stage J-2 chicks
+        :return observed number of total breeders and observed number of total chicks
+        NOTE: Need to keep in mind that I can have numerical errors due to the dimension of the array being used
+        """
+        # Determine the number of samples
+        num_samples = np.shape(x)[0]
+        # Allocate array for sample generation
+        y = np.zeros((num_samples, 2))
+        # Extract the total number of breeders and chicks
+        st = np.sum(x[:, self.num_stages:], axis=1)         # total number of breeders
+        ct = np.sum(x[:, -(self.num_stages-2):], axis=1)    # total number of chicks
+        # Generate observations
+        y[:, 0] = np.random.normal(loc=st, scale=np.sqrt(self.variance_adults)*st).astype(int)
+        y[:, 1] = np.random.normal(loc=ct, scale=np.sqrt(self.variance_chicks)*ct).astype(int)
+        return y
+
+    def obsevation_log_pdf(self, y, x):
+        """
+        Evaluate the logarithm of the observation distribution
+        :param y Observed total breeders and total chciks
+        :param x: Latent penguin populations of the current year
+            - x[:, :num_stages] references the stage 1 to stage J adult penguins
+            - x[:, -num_stages-2:] references the stage 1 to stage J-2 chicks
+        :return logarithm of the observation distribution
+        """
+        # Determine the number of samples
+        num_samples = np.shape(x)[0]
+        # Allocate array for sample generation
+        log_observation = np.zeros(num_samples)
+        # Extract the total number of breeders and chicks
+        st = np.sum(x[:, self.num_stages:], axis=1)  # total number of breeders
+        ct = np.sum(x[:, -(self.num_stages - 2):], axis=1)  # total number of chicks
+        # Generate observations
+        log_observation += sp.norm.logpdf(y[:, 0], loc=st, scale=np.sqrt(self.variance_adults) * st)
+        log_observation += sp.norm.logpdf(y[:, 1], loc=ct, scale=np.sqrt(self.variance_chicks) * ct)
+        return log_observation
