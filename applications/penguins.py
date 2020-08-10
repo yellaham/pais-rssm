@@ -46,7 +46,7 @@ class AgeStructuredModel:
             # Obtain the chicks for the penguins that can breed
             if j >= 1:
                 # Chicks obtained = binomial draw
-                x[:, self.num_stages+j-1] = np.random.binomial(x[:, j+1].astype(int), pr[j-1]).flatten()
+                x[:, self.num_stages+j-1] = np.random.binomial(2*x[:, j+1].astype(int), pr[j-1]).flatten()
         return x
 
     def transition_log_pdf(self, x, x_old):
@@ -68,7 +68,7 @@ class AgeStructuredModel:
                                                   p=self.adult_survival)
             # Obtain the chicks for the penguins that can breed
             if j >= 1:
-                log_transition += sp.binom.logpmf(x[:, self.num_stages+j-1], x[:, j+1].astype(int),
+                log_transition += sp.binom.logpmf(x[:, self.num_stages+j-1], 2*x[:, j+1].astype(int),
                                                   p=self.reproductive_rates[j-1])
         return log_transition
 
