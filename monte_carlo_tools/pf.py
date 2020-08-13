@@ -86,10 +86,11 @@ class RegimeSwitchingParticleFilter:
     """
     A class for outputs to regime-switching particle filters.
     """
-    def __init__(self, x, m_idx, log_w):
+    def __init__(self, x, m_idx, log_w, log_Z):
         self.particles = x
         self.model_indexes = m_idx
         self.log_weights = log_w
+        self.log_evidence = log_Z
         # Compute the normalized weights
         weights = np.exp(self.log_weights[-1]-np.max(self.log_weights[-1]))
         self.normalized_weights = weights/np.sum(weights)
@@ -97,9 +98,6 @@ class RegimeSwitchingParticleFilter:
         self.state_estimates = np.average(x, axis=2)
         # Estimate the trajectory of models
         self.model_estimates = sp.mode(m_idx.T)[0].squeeze()
-        # Compute an estimate of the marginal likelihood
-        max_log_w = np.array([np.max(log_w, axis=1)]).T
-        self.log_evidence = np.sum(np.log(np.mean(np.exp(log_w-max_log_w), axis=1))+max_log_w.squeeze())
 
     def generate_state_trajectory(self, num_samples=1):
         # Multinomial resampling according to normalized weights of particle streams
@@ -168,6 +166,9 @@ def brspf(data, model, x_init):
         else:
             log_w[t] = log_w[t-1] + log_likelihood
 
+        if np.isnan(np.max(log_w[t])):
+            return RegimeSwitchingParticleFilter(x, m_idx, log_w, -np.inf)
+
         # Step 4: Normalize the weights
         w_t = np.exp(log_w[t]-np.max(log_w[t]))
         w_t_n = w_t/np.sum(w_t)
@@ -181,6 +182,10 @@ def brspf(data, model, x_init):
         log_z_est = np.max(log_w[t]) + np.log(np.mean(w_t))
         log_w[t] = np.ones(N)*log_z_est
 
-    return RegimeSwitchingParticleFilter(x, m_idx, log_w)
+    # Compute estimate of log evidence
+    max_log_w = np.array([np.max(log_w, axis=1)]).T
+    log_Z = np.sum(np.log(np.mean(np.exp(log_w - max_log_w), axis=1))+max_log_w.squeeze())
+
+    return RegimeSwitchingParticleFilter(x, m_idx, log_w, log_Z)
 
 

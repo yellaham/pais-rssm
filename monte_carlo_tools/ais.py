@@ -22,7 +22,7 @@ class Sampler:
 
 
 def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weights=False, weight_smoothing=False,
-        eta_mu0=1e-1, eta_sig0=1e-4, g_mu_max=1, g_sig_max=1):
+        eta_mu0=1e-1, eta_sig0=1e-4, optimizer='Constant', g_mu_max=1, g_sig_max=1):
     """
     Runs the adaptive population importance sampling algorithm
     :param log_target: Logarithm of the target distribution
@@ -61,15 +61,16 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weight
     target_mean = np.zeros((iter_num, d))
 
     # For the optimizer
-    vmu = np.zeros((num_prop, d))
-    vsig = np.zeros((num_prop, d, d))
+    if optimizer == 'RMSprop':
+        vmu = np.zeros((num_prop, d))
+        vsig = np.zeros((num_prop, d, d))
 
     # Initialize start counter
     start = 0
     startd = 0
 
     # Loop for the algorithm
-    for i in tqdm(range(iter_num)):
+    for i in range(iter_num):
         # Update start counter
         stop = start + samp_num
         stopd = startd + num_prop
@@ -112,10 +113,14 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weight
             log_weights[start:stop] = log_target_eval[start:stop] - log_prop
 
         # Smoothing of the importance weights (in log domain)
-        lws = log_weights[0:stop]
+        if weight_smoothing:
+            lws, kss = psis.psislw(log_weights[0:stop].astype('float128'))
+        else:
+            lws = log_weights[0:stop]
+            kss = np.nan
 
         # Compute evidence lower bound diagnostic
-        elbo = np.mean(log_weights[0:stop])
+        elbo = np.mean(log_weights[start:stop])
 
         # Obtain the unnormalized importance weights
         max_log_weight = np.max(lws)
@@ -132,49 +137,56 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weight
         # Compute estimate of the target mean
         target_mean[i] = np.average(particles[0:stop, :], axis=0, weights=weights)
 
+        # Print diagnostics
+        print("ITER = %d, ESS = %.2f, K_HAT = %.3f, ELBO = %.5f, log_Z_est = %.5f" % (i+1, ess, kss, elbo, log_z))
+
         # Adapt the parameters of the proposal distribution
         start_j = np.copy(start)
         for j in range(num_prop):
             # Update stop parameter
-            stop_j = start_j + samp_per_prop
+            stop_j = start_j+samp_per_prop
             # Get local children
             x_j = particles[start_j:stop_j]
             # Obtain local log weights
-            log_wj = log_target_eval[start_j:stop_j] - mvn.logpdf(particles[start_j:stop_j], mean=mu[j],
-                                                                  cov=sig[j], allow_singular=True)
+            log_wj = log_target_eval[start_j:stop_j]-mvn.logpdf(particles[start_j:stop_j], mean=mu[j],
+                                                                cov=sig[j], allow_singular=True)
             # Convert to weights using LSE
-            wj = np.exp(log_wj - np.max(log_wj))
+            wj = np.exp(log_wj-np.max(log_wj))
             # Normalize the weights
-            wjn = wj / np.sum(wj)
+            wjn = wj/np.sum(wj)
             "COMPUTATION OF GRADIENTS"
             # Compute the local ESS
             wjtn = wjn
             ESS = np.sum(wjtn**2)**(-1)
             T_s = 1
-            while ESS < np.round(0.1 * samp_per_prop):
+            while ESS < np.round(0.1*samp_per_prop):
                 T_s += 1
                 log_wjt = (1/T_s)*log_wj
-                wjt = np.exp(log_wjt -np.max(log_wjt))
+                wjt = np.exp(log_wjt-np.max(log_wjt))
                 wjtn = wjt/np.sum(wjt)
                 ESS = np.sum(wjtn**2)**(-1)
             # Compute the gradients (based on moment matching criteria)
-            g_mu = (mu[j] - np.average(x_j, axis=0, weights=wjn))
-            g_sig = (sig[j] - np.cov(x_j, rowvar=False, bias=False, aweights=wjtn))
+            g_mu = (mu[j]-np.average(x_j, axis=0, weights=wjn))
+            g_sig = (sig[j]-np.cov(x_j, rowvar=False, bias=True, aweights=wjtn))
             "CLIP THE GRADIENTS"
             if np.linalg.norm(g_mu) > g_mu_max:
-                g_mu = g_mu * (g_mu_max / np.linalg.norm(g_mu))
+                g_mu = g_mu*(g_mu_max/np.linalg.norm(g_mu))
             if np.linalg.norm(g_sig) > g_sig_max:
-                g_sig = g_sig * (g_sig_max / np.linalg.norm(g_sig))
+                g_sig = g_sig*(g_sig_max/np.linalg.norm(g_sig))
             " ADAPTATION OF MEAN AND COVARIANCE MATRIX "
-            # Compute the square of the gradient
-            g_mu_sq = g_mu ** 2
-            g_sig_sq = g_sig ** 2
-            # Update the learning rate parameters
-            vmu[j] = 0.9 * vmu[j] + 0.1 * g_mu_sq
-            vsig[j] = 0.9 * vsig[j] + 0.1 * g_sig_sq
-            # Compute the learning rates
-            eta_mu = eta_mu0 * ((np.sqrt(vmu[j]) + 1e-1) ** (-1))
-            eta_sig = eta_sig0 * ((np.sqrt(vsig[j]) + 1e-1) ** (-1))
+            if optimizer == 'RMSprop':
+                # Compute the square of the gradient
+                g_mu_sq = g_mu**2
+                g_sig_sq = g_sig**2
+                # Update the learning rate parameters
+                vmu[j] = 0.9*vmu[j] + 0.1*g_mu_sq
+                vsig[j] = 0.9*vsig[j] + 0.1*g_sig_sq
+                # Compute the learning rates
+                eta_mu = eta_mu0*((np.sqrt(vmu[j])+1e-3)**(-1))
+                eta_sig = eta_sig0*((np.sqrt(vsig[j])+1e-3)**(-1))
+            else:
+                eta_mu = eta_mu0
+                eta_sig = eta_sig0
             # Update the proposal parameters
             mu[j] = mu[j] - eta_mu*g_mu
             sig[j] = sig[j] - eta_sig*g_sig
@@ -191,20 +203,12 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weight
             start_j = stop_j
 
         # Store parameters
-        means[startd + num_prop: stopd + num_prop] = mu
-        covariances[startd + num_prop: stopd + num_prop] = sig
+        means[startd+num_prop: stopd+num_prop] = mu
+        covariances[startd+num_prop: stopd+num_prop] = sig
 
         # Update start counters
         start = stop
         startd = stopd
-
-    # Print Khat diagnostic if doing weight smoothing
-    if weight_smoothing:
-        lws, kss = psis.psislw(log_weights[0:stop].astype('float128'))
-    else:
-        kss = np.nan
-    print("ESS = %.2f, K_HAT = %.3f, ELBO = %.5f, log_Z_est = %.5f, Z_est = %.5f" % (ess, kss, elbo, log_z,
-                                                                                     evidence[-1]))
 
     # Generate output
     return Sampler(particles, lws.astype('float64'), means, covariances, evidence, target_mean)
