@@ -164,7 +164,7 @@ def brspf(data, model, x_init):
         if t == 0:
             log_w[t] = log_likelihood
         else:
-            log_w[t] = log_w[t-1] + log_likelihood
+            log_w[t] = log_likelihood
 
         if np.isnan(np.max(log_w[t])):
             return RegimeSwitchingParticleFilter(x, m_idx, log_w, -np.inf)
@@ -179,8 +179,8 @@ def brspf(data, model, x_init):
         m_idx[t] = m_idx[t, idx_rs]
 
         # Step 6: Correct the logarithm of the importance weights since full resampling is done
-        log_z_est = np.max(log_w[t]) + np.log(np.mean(w_t))
-        log_w[t] = np.ones(N)*log_z_est
+        #log_z_est = np.max(log_w[t]) + np.log(np.mean(w_t))
+        #log_w[t] = np.ones(N)*log_z_est
 
     # Compute estimate of log evidence
     max_log_w = np.array([np.max(log_w, axis=1)]).T

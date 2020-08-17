@@ -98,6 +98,8 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weight
             log_prop = np.log(prop)
             # Compute the importance weights
             log_weights[0:stop] = log_target_eval[0:stop] - log_prop
+            # Compute evidence lower bound diagnostic
+            elbo = np.mean(log_weights[0:stop])
         else:
             # Compute log proposal
             prop_j = np.zeros((samp_num, num_prop))
@@ -111,6 +113,8 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weight
             log_prop = np.log(prop)
             # Compute the importance weights
             log_weights[start:stop] = log_target_eval[start:stop] - log_prop
+            # Compute evidence lower bound diagnostic
+            elbo = np.mean(log_weights[start:stop])
 
         # Smoothing of the importance weights (in log domain)
         if weight_smoothing:
@@ -119,8 +123,6 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weight
             lws = log_weights[0:stop]
             kss = np.nan
 
-        # Compute evidence lower bound diagnostic
-        elbo = np.mean(log_weights[start:stop])
 
         # Obtain the unnormalized importance weights
         max_log_weight = np.max(lws)
@@ -182,8 +184,8 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weight
                 vmu[j] = 0.9*vmu[j] + 0.1*g_mu_sq
                 vsig[j] = 0.9*vsig[j] + 0.1*g_sig_sq
                 # Compute the learning rates
-                eta_mu = eta_mu0*((np.sqrt(vmu[j])+1e-3)**(-1))
-                eta_sig = eta_sig0*((np.sqrt(vsig[j])+1e-3)**(-1))
+                eta_mu = eta_mu0*((np.sqrt(vmu[j])+1)**(-1))
+                eta_sig = eta_sig0*((np.sqrt(vsig[j])+1)**(-1))
             else:
                 eta_mu = eta_mu0
                 eta_sig = eta_sig0
