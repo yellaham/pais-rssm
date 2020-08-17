@@ -115,11 +115,11 @@ if __name__ == '__main__':
     log_pi = lambda x: pool.map(log_likelihood_per_sample, x)
     # Define the sampler parameters
     dim = 4  # dimension of the unknown parameter
-    N = 200  # number of samples per proposal
-    I = 50  # number of iterations
-    N_w = 100  # number of samples per proposal (warm-up period)
-    I_w = 50  # number of iterations (warm-up period)
-    D = 4   # number of proposals
+    N = 500  # number of samples per proposal
+    I = 100  # number of iterations
+    N_w = 250  # number of samples per proposal (warm-up period)
+    I_w = 150  # number of iterations (warm-up period)
+    D = 1   # number of proposals
     var_0 = 1e-1   # initial variance
     eta_loc = 1e-1  # learning rate for the mean
     eta_scale = 1e-1    # learning rate for the covariance matrix
