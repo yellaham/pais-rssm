@@ -150,9 +150,9 @@ if __name__ == '__main__':
     # Use sampling importance resampling to extract posterior samples
     theta = ais.importance_resampling(output.particles, output.log_weights, num_samp=1000)
     # Apply transformations to the samples
-    theta[0] = 1/(1+np.exp(-theta[0]))
-    theta[1] = 1/(1+np.exp(-theta[1]))
-    theta[3] = np.exp(theta[3])
+    theta[:, 0] = 1/(1+np.exp(-theta[:, 0]))
+    theta[:, 1] = 1/(1+np.exp(-theta[:, 1]))
+    theta[:, 3] = np.exp(theta[:, 3])
     # Matrix plot of the approximated target distribution
     plt.figure()
     count = 1
