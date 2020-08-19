@@ -91,11 +91,17 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weight
             prop_j = np.zeros((samp_num * (i + 1), num_prop * (i + 1)))
             log_prop_j = np.copy(prop_j)
             prop = np.zeros(samp_num * (i + 1))
+            prop_dm = np.zeros(samp_num)
             for j in range(num_prop * (i + 1)):
                 prop_j[:, j] = mvn.pdf(particles[0:stop], mean=means[j], cov=covariances[j], allow_singular=True)
                 log_prop_j[:, j] = mvn.logpdf(particles[0:stop], mean=means[j], cov=covariances[j], allow_singular=True)
                 prop += prop_j[:, j] / (num_prop * (i + 1))
+                if j >= num_prop*i:
+                    prop_dm += prop_j[start:stop, j]/num_prop
+            # Obtain logarithm of temporal deterministic mixture weights
             log_prop = np.log(prop)
+            # Obtain logarithm of standard deterministic mixture weights
+            log_prop_dm = np.log(prop_dm)
             # Compute the importance weights
             log_weights[0:stop] = log_target_eval[0:stop] - log_prop
             # Compute evidence lower bound diagnostic
@@ -110,7 +116,11 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weight
                 log_prop_j[:, j] = mvn.logpdf(particles[start:stop], mean=mu[j], cov=sig[j],
                                               allow_singular=True)
                 prop += prop_j[:, j]/num_prop
+            # Obtain logarithm of standard deterministic mixture weights
             log_prop = np.log(prop)
+            # Dummy variables used for adaptation step
+            prop_dm = prop
+            log_prop_dm = log_prop
             # Compute the importance weights
             log_weights[start:stop] = log_target_eval[start:stop] - log_prop
             # Compute evidence lower bound diagnostic
@@ -122,7 +132,6 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weight
         else:
             lws = log_weights[0:stop]
             kss = np.nan
-
 
         # Obtain the unnormalized importance weights
         max_log_weight = np.max(lws)
@@ -149,9 +158,10 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weight
             stop_j = start_j+samp_per_prop
             # Get local children
             x_j = particles[start_j:stop_j]
+            # Evaluate current proposal
+            log_prop_j_temp = mvn.logpdf(particles[start_j:stop_j], mean=mu[j], cov=sig[j], allow_singular=True)
             # Obtain local log weights
-            log_wj = log_target_eval[start_j:stop_j]-mvn.logpdf(particles[start_j:stop_j], mean=mu[j],
-                                                                cov=sig[j], allow_singular=True)
+            log_wj = log_target_eval[start_j:stop_j]-log_prop_j_temp
             # Convert to weights using LSE
             wj = np.exp(log_wj-np.max(log_wj))
             # Normalize the weights
@@ -167,9 +177,10 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weight
                 wjt = np.exp(log_wjt-np.max(log_wjt))
                 wjtn = wjt/np.sum(wjt)
                 ESS = np.sum(wjtn**2)**(-1)
-            # Compute the gradients (based on moment matching criteria)
+            # # Compute the gradients (based on moment matching criterion)
             g_mu = (mu[j]-np.average(x_j, axis=0, weights=wjn))
             g_sig = (sig[j]-np.cov(x_j, rowvar=False, bias=True, aweights=wjtn))
+            # Compute the gradients (based on minimum variance importance weights criterion)
             "CLIP THE GRADIENTS"
             if np.linalg.norm(g_mu) > g_mu_max:
                 g_mu = g_mu*(g_mu_max/np.linalg.norm(g_mu))

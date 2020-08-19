@@ -83,12 +83,12 @@ def log_likelihood_per_sample(input_parameters):
     z[4] = np.exp(z[4])
     z[5] = 1/(1+np.exp(-z[5]))
     # Evaluate prior distribution at transformed samples (don't forget to factor in Jacobian from transformation)
-    log_prior = sp.beta.logpdf(z[0], 3, 3)+log_jacobian_sigmoid(input_parameters[0])
-    log_prior += sp.beta.logpdf(z[1], 3, 3)+log_jacobian_sigmoid(input_parameters[1])
-    log_prior += sp.norm.logpdf(z[2], 0, 1e6)
+    log_prior = sp.beta.logpdf(z[0], 1, 1)+log_jacobian_sigmoid(input_parameters[0])
+    log_prior += sp.beta.logpdf(z[1], 1, 1)+log_jacobian_sigmoid(input_parameters[1])
+    log_prior += sp.norm.logpdf(z[2], 0, 10)
     log_prior += sp.gamma.logpdf(z[3], 0.001, 0.001)+input_parameters[3]
     log_prior += sp.gamma.logpdf(z[4], 0.001, 0.001)+input_parameters[4]
-    log_prior += sp.beta.logpdf(z[5], 1, 4)+log_jacobian_sigmoid(input_parameters[5])
+    log_prior += sp.beta.logpdf(z[5], 1, 1)+log_jacobian_sigmoid(input_parameters[5])
     # Create the model (assuming the noise variances are known)
     regimes = [penguins.AgeStructuredModel(psi_juv=z[0], psi_adu=z[1], alpha_r=z[2], beta_r=z[4], var_s=param[6],
                                           var_c=param[7], nstage=num_stages),
@@ -118,9 +118,9 @@ if __name__ == '__main__':
     log_pi = lambda x: pool.map(log_likelihood_per_sample, x)
     # Define the sampler parameters
     dim = 6  # dimension of the unknown parameter
-    N = 100  # number of samples per proposal
+    N = 200  # number of samples per proposal
     I = 100  # number of iterations
-    N_w = 60  # number of samples per proposal (warm-up period)
+    N_w = 100  # number of samples per proposal (warm-up period)
     I_w = 100  # number of iterations (warm-up period)
     D = 5   # number of proposals
     var_0 = 1e-1   # initial variance
