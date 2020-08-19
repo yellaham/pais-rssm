@@ -12,10 +12,10 @@ class Sampler:
     #   - Method to compute an approximation of the evidence (unbiased)
     #   - Method to compute an approximation of the target mean (consistent)
     #   - Method to extract samples from the approximation to the target distribution
-    def __init__(self, x, log_w, mu, sig, z_est, mu_est):
+    def __init__(self, x, log_w, mu, sig, log_z_est, mu_est):
         self.particles = x
         self.log_weights = log_w
-        self.evidence = z_est
+        self.log_evidence = log_z_est
         self.target_mean = mu_est
         self.means = mu
         self.covariances = sig
@@ -57,7 +57,7 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weight
     covariances[0:num_prop] = sig
 
     # Initialize storage of evidence and target mean estimates
-    evidence = np.zeros(iter_num)
+    log_evidence = np.zeros(iter_num)
     target_mean = np.zeros((iter_num, d))
 
     # For the optimizer
@@ -134,7 +134,7 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weight
 
         # Estimate the evidence
         log_z = max_log_weight + np.log(np.mean(weights))
-        evidence[i] = np.exp(log_z)
+        log_evidence[i] = log_z
 
         # Compute estimate of the target mean
         target_mean[i] = np.average(particles[0:stop, :], axis=0, weights=weights)
@@ -213,7 +213,7 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weight
         startd = stopd
 
     # Generate output
-    return Sampler(particles, lws.astype('float64'), means, covariances, evidence, target_mean)
+    return Sampler(particles, lws.astype('float64'), means, covariances, log_evidence, target_mean)
 
 
 def importance_resampling(x, log_w, num_samp=1):

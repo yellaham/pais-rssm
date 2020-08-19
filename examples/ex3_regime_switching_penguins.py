@@ -12,7 +12,7 @@ from functools import partial
 def log_jacobian_sigmoid(x): return -x-2*np.log(1+np.exp(-x))
 
 
-## PART 1: DATA SIMULATION
+# PART 1: DATA SIMULATION
 
 # Parameters of the true model
 #   -param[0] - juvenile survival
@@ -66,6 +66,7 @@ plt.legend(['Observed sum of adults', 'Observed sum of chicks'])
 plt.show()
 
 
+# PART 2: ASSUMED MODEL
 def log_likelihood_per_sample(input_parameters):
     # First check to see that the monotonicity constraints are satisfied
     if not (input_parameters[2] < input_parameters[3]):
@@ -105,7 +106,7 @@ def log_likelihood_per_sample(input_parameters):
     return output.log_evidence+log_prior
 
 
-## PART 2: Inference
+# PART 3: PARAMETER INFERENCE
 if __name__ == '__main__':
     # Set a random seed
     np.random.seed()
@@ -117,11 +118,11 @@ if __name__ == '__main__':
     log_pi = lambda x: pool.map(log_likelihood_per_sample, x)
     # Define the sampler parameters
     dim = 6  # dimension of the unknown parameter
-    N = 200  # number of samples per proposal
+    N = 100  # number of samples per proposal
     I = 100  # number of iterations
-    N_w = 100  # number of samples per proposal (warm-up period)
+    N_w = 60  # number of samples per proposal (warm-up period)
     I_w = 100  # number of iterations (warm-up period)
-    D = 4   # number of proposals
+    D = 5   # number of proposals
     var_0 = 1e-1   # initial variance
     eta_loc = 5e-2  # learning rate for the mean
     eta_scale = 5e-2    # learning rate for the covariance matrix
