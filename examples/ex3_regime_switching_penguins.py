@@ -23,7 +23,7 @@ def log_jacobian_sigmoid(x): return -x-2*np.log(1+np.exp(-x))
 #   -param[5] - probability of bad year
 #   -param[6] - variance of observations (breeders)
 #   -param[7] - variance of observations (chicks)
-param = np.array([0.35, 0.875, -1, -0.1, 0.1, 0.15, 0.01, 0.01])
+param = np.array([0.35, 0.875, -0.7, -0.3, 0.2, 0.1, 0.01, 0.01])
 # Number of stages to use for model
 num_stages = 5
 
@@ -87,7 +87,7 @@ def log_likelihood_per_sample(input_parameters):
     log_prior += sp.beta.logpdf(z[1], 3, 3)+log_jacobian_sigmoid(input_parameters[1])
     log_prior += sp.norm.logpdf(z[2], 0, 1)
     log_prior += sp.gamma.logpdf(z[3], 0.001, 0.001)+input_parameters[3]
-    log_prior += sp.gamma.logpdf(z[4], 1, 0.1)+input_parameters[4]
+    log_prior += sp.norm.logpdf(z[4], 0, 0.1)+input_parameters[4]
     log_prior += sp.beta.logpdf(z[5], 1, 9)+log_jacobian_sigmoid(input_parameters[5])
     # Create the model (assuming the noise variances are known)
     regimes = [penguins.AgeStructuredModel(psi_juv=z[0], psi_adu=z[1], alpha_r=z[2], beta_r=z[4], var_s=param[6],
@@ -118,11 +118,11 @@ if __name__ == '__main__':
     log_pi = lambda x: pool.map(log_likelihood_per_sample, x)
     # Define the sampler parameters
     dim = 6  # dimension of the unknown parameter
-    N = 200  # number of samples per proposal
-    I = 100  # number of iterations
+    N = 500  # number of samples per proposal
+    I = 50  # number of iterations
     N_w = 100  # number of samples per proposal (warm-up period)
-    I_w = 200  # number of iterations (warm-up period)
-    D = 5   # number of proposals
+    I_w = 200   # number of iterations (warm-up period)
+    D = 5      # number of proposals
     var_0 = 1e-1   # initial variance
     eta_loc = 5e-2  # learning rate for the mean
     eta_scale = 5e-2    # learning rate for the covariance matrix
@@ -130,17 +130,17 @@ if __name__ == '__main__':
     mu_init = np.zeros((D, dim))
     sig_init = np.zeros((D, dim, dim))
     for j in range(D):
-        mu_init[j, 0] = np.random.uniform(-1, 0)
+        mu_init[j, 0] = np.random.uniform(-2, -0.5)
         sig_init[j, 0, 0] = var_0
-        mu_init[j, 1] = np.random.uniform(0.75, 1.5)
+        mu_init[j, 1] = np.random.uniform(1, 2)
         sig_init[j, 1, 1] = var_0
-        mu_init[j, 2] = np.random.uniform(-1, -0.35)
+        mu_init[j, 2] = np.random.uniform(-1, 0)
         sig_init[j, 2, 2] = var_0
-        mu_init[j, 3] = np.random.uniform(-0.25, 0.25)
+        mu_init[j, 3] = np.random.uniform(-0.5, 0)
         sig_init[j, 3, 3] = var_0
-        mu_init[j, 4] = np.random.uniform(0, 1)
+        mu_init[j, 4] = np.random.uniform(-2, 0)
         sig_init[j, 4, 4] = var_0
-        mu_init[j, 5] = np.random.uniform(-1, -0.25)
+        mu_init[j, 5] = np.random.uniform(-2, -0.5)
         sig_init[j, 5, 5] = var_0
     # Warm up the sampler by running it for some number of iterations
     init_sampler = ais.ais(log_target=log_pi, d=dim, mu=mu_init, sig=sig_init, samp_per_prop=N_w, iter_num=I_w,
@@ -148,16 +148,19 @@ if __name__ == '__main__':
                            criterion='Moment Matching', optimizer='Constant')
     # Run sampler with initialized parameters
     output = ais.ais(log_target=log_pi, d=dim, mu=init_sampler.means[-D:], sig=init_sampler.covariances[-D:],
-                     samp_per_prop=N, iter_num=I, weight_smoothing=True, temporal_weights=True, eta_mu0=0.01*eta_loc,
+                     samp_per_prop=N, iter_num=I, weight_smoothing=True, temporal_weights=True, eta_mu0=0.05*eta_loc,
                      eta_sig0=0.1*eta_scale, criterion='Minimum Variance', optimizer='RMSprop')
     # Use sampling importance resampling to extract posterior samples
     theta = ais.importance_resampling(output.particles, output.log_weights, num_samp=1000)
     # Apply transformations to the samples
     theta[:, 0] = 1/(1+np.exp(-theta[:, 0]))
     theta[:, 1] = 1/(1+np.exp(-theta[:, 1]))
-    theta[:, 3] = np.exp(theta[:, 3])
+    theta[:, 3] = theta[:, 2] + np.exp(theta[:, 3])
     theta[:, 4] = np.exp(theta[:, 4])
     theta[:, 5] = 1/(1+np.exp(-theta[:, 5]))
+    # Create labels for each parameter
+    labels = ['Juvenile Survival', 'Adult Survival', 'Logit Intercept (Bad)', 'Logit Intercept (Good)', 'Logit Slope',
+              'Probability of Bad Year']
     # Matrix plot of the approximated target distribution
     plt.figure()
     count = 1
@@ -170,6 +173,21 @@ if __name__ == '__main__':
                 plt.hist(theta[:, i])
             count += 1
     plt.show()
-
+    # Plot all of the one-dimensional histograms
+    for i in range(dim):
+        plt.figure()
+        plt.hist(theta[:, i])
+        plt.axvline(param[i])
+        plt.xlabel(labels[i])
+        plt.show()
+    # Plot all of the two-dimensional histograms
+    for i in range(dim):
+        for j in range(dim):
+            if i != j:
+                plt.figure()
+                sns.kdeplot(theta[:, i], theta[:, j], cmap="Blues", shade=True, shade_lowest=False)
+                plt.xlabel(labels[i])
+                plt.ylabel(labels[j])
+                plt.show()
 
 
