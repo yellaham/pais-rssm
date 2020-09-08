@@ -52,7 +52,7 @@ time_generate = 100
 y, x, m_idx = model.generate_data(init_state=x_init, T=time_generate)
 
 # Cutoff the first 30 time points
-cut_off = 70
+cut_off = 60
 time_length = time_generate-cut_off
 y = y[-time_length:]
 x = x[-(time_length+1):]
@@ -85,7 +85,7 @@ def log_likelihood_per_sample(input_parameters):
     # Evaluate prior distribution at transformed samples (don't forget to factor in Jacobian from transformation)
     log_prior = sp.beta.logpdf(z[0], 3, 3)+log_jacobian_sigmoid(input_parameters[0])
     log_prior += sp.beta.logpdf(z[1], 3, 3)+log_jacobian_sigmoid(input_parameters[1])
-    log_prior += sp.norm.logpdf(z[2], 0, 10)
+    log_prior += sp.norm.logpdf(z[2], 0, 1)
     log_prior += sp.gamma.logpdf(z[3], 0.001, 0.001)+input_parameters[3]
     log_prior += sp.gamma.logpdf(z[4], 1, 0.1)+input_parameters[4]
     log_prior += sp.beta.logpdf(z[5], 1, 9)+log_jacobian_sigmoid(input_parameters[5])
@@ -100,7 +100,7 @@ def log_likelihood_per_sample(input_parameters):
     # Create regime switching system
     model = pf.MultiRegimeSSM(regimes, draw_regimes, regimes_log_pdf)
     # Draw the initial particles
-    x_init = np.array([x[0]]).T+np.random.randint(low=-100, high=100, size=(2*num_stages-2, num_particles))
+    x_init = np.array([x[0]]).T+np.random.randint(low=-10, high=10, size=(2*num_stages-2, num_particles))
     # Run the particle filter and return the log-likelihood
     output = pf.brspf(y, model, x_init)
     return output.log_evidence+log_prior
