@@ -22,7 +22,7 @@ class Sampler:
 
 
 def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weights=False, weight_smoothing=False,
-        eta_mu0=1e-1, eta_sig0=1e-4, optimizer='Constant', g_mu_max=1, g_sig_max=1):
+        eta_mu0=1e-1, eta_sig0=1e-4, criterion='Moment Matching', optimizer='Constant', g_mu_max=1, g_sig_max=1):
     """
     Runs the adaptive population importance sampling algorithm
     :param log_target: Logarithm of the target distribution
@@ -158,14 +158,22 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weight
             stop_j = start_j+samp_per_prop
             # Get local children
             x_j = particles[start_j:stop_j]
+            # Obtain the proposal ratio using the evaluate log weights
+            prop_dm = np.zeros(samp_per_prop)
+            for jj in range(num_prop):
+                prop_dm += (1/num_prop)*mvn.pdf(x_j, mean=mu[jj], cov=sig[jj], allow_singular=True)
+            q_ratio = mvn.pdf(x_j, mean=mu[j], cov=sig[j], allow_singular=True)/prop_dm
             # Evaluate current proposal
-            log_prop_j_temp = mvn.logpdf(particles[start_j:stop_j], mean=mu[j], cov=sig[j], allow_singular=True)
+            log_prop_j_temp = mvn.logpdf(x_j, mean=mu[j], cov=sig[j], allow_singular=True)
             # Obtain local log weights
             log_wj = log_target_eval[start_j:stop_j]-log_prop_j_temp
             # Convert to weights using LSE
             wj = np.exp(log_wj-np.max(log_wj))
             # Normalize the weights
             wjn = wj/np.sum(wj)
+            # Obtain the local dm weights
+            log_wjdm = log_target_eval[start_j:stop_j] - np.log(prop_dm)
+            wjdm = np.exp(log_wjdm-np.max(log_wjdm))
             "COMPUTATION OF GRADIENTS"
             # Compute the local ESS
             wjtn = wjn
@@ -177,10 +185,23 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weight
                 wjt = np.exp(log_wjt-np.max(log_wjt))
                 wjtn = wjt/np.sum(wjt)
                 ESS = np.sum(wjtn**2)**(-1)
-            # # Compute the gradients (based on moment matching criterion)
-            g_mu = (mu[j]-np.average(x_j, axis=0, weights=wjn))
-            g_sig = (sig[j]-np.cov(x_j, rowvar=False, bias=True, aweights=wjtn))
-            # Compute the gradients (based on minimum variance importance weights criterion)
+            if criterion == 'Moment Matching':
+                # # Compute the gradients (based on moment matching criterion)
+                g_mu = (mu[j]-np.average(x_j, axis=0, weights=wjn))
+                g_sig = (sig[j]-np.cov(x_j, rowvar=False, bias=True, aweights=wjtn))
+            elif criterion == 'Minimum Variance':
+                # Compute the gradients (based on minimum variance importance weights criterion)
+                g_mu = np.zeros(d)
+                g_sig = np.zeros((d, d))
+                # Compute inverse of the covariance matrix
+                prec_j = np.linalg.inv(sig[j])
+                for n in range(samp_per_prop):
+                    # Compute ds_dmu and ds_dsig
+                    ds_dmu = -(1/num_prop)*wjdm[n]*q_ratio[n]*np.matmul((x_j[n] - mu[j]), prec_j)
+                    ds_dsig = (0.5/num_prop)*wjdm[n]*q_ratio[n]*(prec_j-np.dot(np.dot(prec_j, np.outer(x_j[n]-mu[j], x_j[n]-mu[j])), prec_j))
+                    # Compute gradients based on ds
+                    g_mu = g_mu + wjn[n] * ds_dmu
+                    g_sig = g_sig + wjtn[n] * ds_dsig
             "CLIP THE GRADIENTS"
             if np.linalg.norm(g_mu) > g_mu_max:
                 g_mu = g_mu*(g_mu_max/np.linalg.norm(g_mu))

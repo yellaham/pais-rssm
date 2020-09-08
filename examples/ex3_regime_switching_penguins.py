@@ -52,7 +52,7 @@ time_generate = 100
 y, x, m_idx = model.generate_data(init_state=x_init, T=time_generate)
 
 # Cutoff the first 30 time points
-cut_off = 60
+cut_off = 70
 time_length = time_generate-cut_off
 y = y[-time_length:]
 x = x[-(time_length+1):]
@@ -74,29 +74,29 @@ def log_likelihood_per_sample(input_parameters):
     # Set the random seed
     np.random.seed()
     # Define the number of particles
-    num_particles = 500
+    num_particles = 2000
     # Apply relevant transformations to the sample (sigmoid transformation to probability parameters)
     z = np.copy(input_parameters)
     z[0] = 1/(1+np.exp(-z[0]))
     z[1] = 1/(1+np.exp(-z[1]))
     z[3] = np.exp(z[3])
-    #z[4] = np.exp(z[4])
-    #z[5] = 1/(1+np.exp(-z[5]))
+    z[4] = np.exp(z[4])
+    z[5] = 1/(1+np.exp(-z[5]))
     # Evaluate prior distribution at transformed samples (don't forget to factor in Jacobian from transformation)
     log_prior = sp.beta.logpdf(z[0], 3, 3)+log_jacobian_sigmoid(input_parameters[0])
     log_prior += sp.beta.logpdf(z[1], 3, 3)+log_jacobian_sigmoid(input_parameters[1])
     log_prior += sp.norm.logpdf(z[2], 0, 10)
     log_prior += sp.gamma.logpdf(z[3], 0.001, 0.001)+input_parameters[3]
-    #log_prior += sp.gamma.logpdf(z[4], 1, 0.1)+input_parameters[4]
-    #log_prior += sp.beta.logpdf(z[5], 3, 3)+log_jacobian_sigmoid(input_parameters[5])
+    log_prior += sp.gamma.logpdf(z[4], 1, 0.1)+input_parameters[4]
+    log_prior += sp.beta.logpdf(z[5], 1, 9)+log_jacobian_sigmoid(input_parameters[5])
     # Create the model (assuming the noise variances are known)
-    regimes = [penguins.AgeStructuredModel(psi_juv=z[0], psi_adu=z[1], alpha_r=z[2], beta_r=param[4], var_s=param[6],
+    regimes = [penguins.AgeStructuredModel(psi_juv=z[0], psi_adu=z[1], alpha_r=z[2], beta_r=z[4], var_s=param[6],
                                           var_c=param[7], nstage=num_stages),
-               penguins.AgeStructuredModel(psi_juv=z[0], psi_adu=z[1], alpha_r=z[2]+z[3], beta_r=param[4], var_s=param[6],
+               penguins.AgeStructuredModel(psi_juv=z[0], psi_adu=z[1], alpha_r=z[2]+z[3], beta_r=z[4], var_s=param[6],
                                     var_c=param[7], nstage=num_stages)]
     draw_regimes = lambda model_idx, num_samp: np.random.choice(np.arange(start=0, stop=2), num_samp, replace=True,
-                                                                        p=np.array([param[5], 1 - param[5]]))
-    regimes_log_pdf = lambda model_idx: model_idx*np.log(1-param[5])+(1-model_idx)*np.log(param[5])
+                                                                        p=np.array([z[5], 1 - z[5]]))
+    regimes_log_pdf = lambda model_idx: model_idx*np.log(1-z[5])+(1-model_idx)*np.log(z[5])
     # Create regime switching system
     model = pf.MultiRegimeSSM(regimes, draw_regimes, regimes_log_pdf)
     # Draw the initial particles
@@ -117,11 +117,11 @@ if __name__ == '__main__':
     # Define the target distribution
     log_pi = lambda x: pool.map(log_likelihood_per_sample, x)
     # Define the sampler parameters
-    dim = 4  # dimension of the unknown parameter
+    dim = 6  # dimension of the unknown parameter
     N = 200  # number of samples per proposal
     I = 100  # number of iterations
     N_w = 100  # number of samples per proposal (warm-up period)
-    I_w = 100  # number of iterations (warm-up period)
+    I_w = 200  # number of iterations (warm-up period)
     D = 5   # number of proposals
     var_0 = 1e-1   # initial variance
     eta_loc = 5e-2  # learning rate for the mean
@@ -138,18 +138,18 @@ if __name__ == '__main__':
         sig_init[j, 2, 2] = var_0
         mu_init[j, 3] = np.random.uniform(-0.25, 0.25)
         sig_init[j, 3, 3] = var_0
-        # mu_init[j, 4] = np.random.uniform(0, 1)
-        # sig_init[j, 4, 4] = var_0
-        # mu_init[j, 5] = np.random.uniform(-1, -0.25)
-        # sig_init[j, 5, 5] = var_0
+        mu_init[j, 4] = np.random.uniform(0, 1)
+        sig_init[j, 4, 4] = var_0
+        mu_init[j, 5] = np.random.uniform(-1, -0.25)
+        sig_init[j, 5, 5] = var_0
     # Warm up the sampler by running it for some number of iterations
     init_sampler = ais.ais(log_target=log_pi, d=dim, mu=mu_init, sig=sig_init, samp_per_prop=N_w, iter_num=I_w,
                            temporal_weights=False, weight_smoothing=True, eta_mu0=eta_loc, eta_sig0=eta_scale,
-                           optimizer='Constant')
+                           criterion='Moment Matching', optimizer='Constant')
     # Run sampler with initialized parameters
     output = ais.ais(log_target=log_pi, d=dim, mu=init_sampler.means[-D:], sig=init_sampler.covariances[-D:],
-                     samp_per_prop=N, iter_num=I, weight_smoothing=True, temporal_weights=True, eta_mu0=eta_loc,
-                     eta_sig0=eta_scale, optimizer='RMSprop')
+                     samp_per_prop=N, iter_num=I, weight_smoothing=True, temporal_weights=True, eta_mu0=0.01*eta_loc,
+                     eta_sig0=0.1*eta_scale, criterion='Minimum Variance', optimizer='RMSprop')
     # Use sampling importance resampling to extract posterior samples
     theta = ais.importance_resampling(output.particles, output.log_weights, num_samp=1000)
     # Apply transformations to the samples
@@ -157,7 +157,7 @@ if __name__ == '__main__':
     theta[:, 1] = 1/(1+np.exp(-theta[:, 1]))
     theta[:, 3] = np.exp(theta[:, 3])
     theta[:, 4] = np.exp(theta[:, 4])
-    theta[:, 5] = np.exp(theta[:, 5])
+    theta[:, 5] = 1/(1+np.exp(-theta[:, 5]))
     # Matrix plot of the approximated target distribution
     plt.figure()
     count = 1
