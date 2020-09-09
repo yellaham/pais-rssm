@@ -52,7 +52,7 @@ time_generate = 100
 y, x, m_idx = model.generate_data(init_state=x_init, T=time_generate)
 
 # Cutoff the first 30 time points
-cut_off = 60
+cut_off = 30
 time_length = time_generate-cut_off
 y = y[-time_length:]
 x = x[-(time_length+1):]
@@ -180,14 +180,14 @@ if __name__ == '__main__':
         plt.axvline(param[i])
         plt.xlabel(labels[i])
         plt.show()
-    # Plot all of the two-dimensional histograms
-    for i in range(dim):
-        for j in range(dim):
-            if i != j:
-                plt.figure()
-                sns.kdeplot(theta[:, i], theta[:, j], cmap="Blues", shade=True, shade_lowest=False)
-                plt.xlabel(labels[i])
-                plt.ylabel(labels[j])
-                plt.show()
+    # # Plot all of the two-dimensional histograms
+    # for i in range(dim):
+    #     for j in range(dim):
+    #         if i != j:
+    #             plt.figure()
+    #             sns.kdeplot(theta[:, i], theta[:, j], cmap="Blues", shade=True, shade_lowest=False)
+    #             plt.xlabel(labels[i])
+    #             plt.ylabel(labels[j])
+    #             plt.show()
 
 
