@@ -25,7 +25,7 @@ def log_jacobian_sigmoid(x): return -x-2*np.log(1+np.exp(-x))
 #   -param[7] - variance of observations (chicks)
 param = np.array([0.35, 0.875, -0.7, -0.3, 0.2, 0.1, 0.01, 0.01])
 # Number of stages to use for model
-num_stages = 5
+num_stages = 7
 
 # Define the list of candidate models
 candidate_models = [penguins.AgeStructuredModel(psi_juv=param[0], psi_adu=param[1], alpha_r=param[2], beta_r=param[4],
@@ -64,6 +64,10 @@ plt.plot(y[:, 0])
 plt.plot(y[:, 1])
 plt.legend(['Observed sum of adults', 'Observed sum of chicks'])
 plt.show()
+
+# Extract age distribution
+age_distribution = x[:, :num_stages]/np.repeat(np.reshape(np.sum(x[:, :num_stages], axis=1),
+                                                          (-1, np.shape(x)[0])).T, num_stages, axis=1)
 
 
 # PART 2: ASSUMED MODEL
