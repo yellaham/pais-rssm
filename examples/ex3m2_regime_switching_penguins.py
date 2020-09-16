@@ -6,75 +6,23 @@ import seaborn as sns
 from applications import penguins
 from monte_carlo_tools import pf
 from monte_carlo_tools import ais
-from functools import partial
+
 
 ## DEFINITIONS
 def log_jacobian_sigmoid(x): return -x-2*np.log(1+np.exp(-x))
 
 
-# PART 1: DATA SIMULATION
-
-# Parameters of the true model
-#   -param[0] - juvenile survival
-#   -param[1] - adult survival
-#   -param[2] - reproductive success bias (bad year)
-#   -param[3] - reproductive success bias (good year)
-#   -param[4] - reproductive success slope
-#   -param[5] - probability of bad year
-#   -param[6] - variance of observations (breeders)
-#   -param[7] - variance of observations (chicks)
-param = np.array([0.35, 0.875, -0.7, -0.3, 0.2, 0.1, 0.01, 0.01])
-# Number of stages to use for model
-num_stages = 7
-
-# Define the list of candidate models
-candidate_models = [penguins.AgeStructuredModel(psi_juv=param[0], psi_adu=param[1], alpha_r=param[2], beta_r=param[4],
-                                                var_s=param[6], var_c=param[7], nstage=num_stages),
-                    penguins.AgeStructuredModel(psi_juv=param[0], psi_adu=param[1], alpha_r=param[3], beta_r=param[4],
-                                                var_s=param[6], var_c=param[7], nstage=num_stages)]
-
-# Define the regime dynamics
-regime_dynamics_rand = lambda model_idx, num_samp: np.random.choice(np.arange(start=0, stop=2), num_samp,
-                                                                    replace=True, p=np.array([param[5], 1-param[5]]))
-regime_dynamics_log_pdf = lambda model_idx: model_idx*np.log(1-param[5])+(1-model_idx)*np.log(param[5])
-
-
-# Create a multiple regime SSM and generate synthetic data
-model = pf.MultiRegimeSSM(candidate_models, regime_dynamics_rand, regime_dynamics_log_pdf)
-
-# Determine initial state
-x_init = np.random.randint(low=500, high=2000, size=2*num_stages-2)
-
-# Determine length of time to generate data for
-time_generate = 100
-
-# Generate ground truth for the regime switching system
-y, x, m_idx = model.generate_data(init_state=x_init, T=time_generate)
-
-# Cutoff the first 30 time points
-cut_off = 30
-time_length = time_generate-cut_off
-y = y[-time_length:]
-x = x[-(time_length+1):]
-m_idx = m_idx[-time_length:]
-
-# Plot the generated observations
-plt.figure()
-plt.plot(y[:, 0])
-plt.plot(y[:, 1])
-plt.legend(['Observed sum of adults', 'Observed sum of chicks'])
-plt.show()
-
-# Extract age distribution
-age_distribution = x[:, :num_stages]/np.repeat(np.reshape(np.sum(x[:, :num_stages], axis=1),
-                                                          (-1, np.shape(x)[0])).T, num_stages, axis=1)
-
+# PART 1: LOAD DATA
+with np.load('simulated_data.npz') as data:
+    param = data['param']
+    num_stages = data['num_stages']
+    x_init = data['x_init']
+    x = data['x']
+    y = data['y']
+    m_idx = data['m_idx']
 
 # PART 2: ASSUMED MODEL
 def log_likelihood_per_sample(input_parameters):
-    # First check to see that the monotonicity constraints are satisfied
-    if not (input_parameters[2] < input_parameters[3]):
-        return -np.inf
     # Set the random seed
     np.random.seed()
     # Define the number of particles
@@ -82,21 +30,22 @@ def log_likelihood_per_sample(input_parameters):
     # Apply relevant transformations to the sample (sigmoid transformation to probability parameters)
     z = np.copy(input_parameters)
     z[0] = 1/(1+np.exp(-z[0]))
-    z[1] = 1/(1+np.exp(-z[1]))
-    z[3] = np.exp(z[3])
+    z[1] = np.exp(z[1])
+    psi_juv_big = 1/(1+np.exp(-(input_parameters[0]+z[1])))
+    z[2] = 1/(1+np.exp(-z[2]))
     z[4] = np.exp(z[4])
     z[5] = 1/(1+np.exp(-z[5]))
     # Evaluate prior distribution at transformed samples (don't forget to factor in Jacobian from transformation)
     log_prior = sp.beta.logpdf(z[0], 3, 3)+log_jacobian_sigmoid(input_parameters[0])
-    log_prior += sp.beta.logpdf(z[1], 3, 3)+log_jacobian_sigmoid(input_parameters[1])
-    log_prior += sp.norm.logpdf(z[2], 0, 1)
-    log_prior += sp.gamma.logpdf(z[3], 0.001, 0.001)+input_parameters[3]
+    log_prior += sp.gamma.logpdf(z[1], 0.001, 0.001)+input_parameters[1]
+    log_prior += sp.beta.logpdf(z[2], 3, 3)+log_jacobian_sigmoid(input_parameters[2])
+    log_prior += sp.norm.logpdf(z[3], 0, 1)
     log_prior += sp.norm.logpdf(z[4], 0, 0.1)+input_parameters[4]
     log_prior += sp.beta.logpdf(z[5], 1, 9)+log_jacobian_sigmoid(input_parameters[5])
     # Create the model (assuming the noise variances are known)
-    regimes = [penguins.AgeStructuredModel(psi_juv=z[0], psi_adu=z[1], alpha_r=z[2], beta_r=z[4], var_s=param[6],
+    regimes = [penguins.AgeStructuredModel(psi_juv=z[0], psi_adu=z[2], alpha_r=z[3], beta_r=z[4], var_s=param[6],
                                           var_c=param[7], nstage=num_stages),
-               penguins.AgeStructuredModel(psi_juv=z[0], psi_adu=z[1], alpha_r=z[2]+z[3], beta_r=z[4], var_s=param[6],
+               penguins.AgeStructuredModel(psi_juv=psi_juv_big, psi_adu=z[2], alpha_r=z[3], beta_r=z[4], var_s=param[6],
                                     var_c=param[7], nstage=num_stages)]
     draw_regimes = lambda model_idx, num_samp: np.random.choice(np.arange(start=0, stop=2), num_samp, replace=True,
                                                                         p=np.array([z[5], 1 - z[5]]))
@@ -108,7 +57,6 @@ def log_likelihood_per_sample(input_parameters):
     # Run the particle filter and return the log-likelihood
     output = pf.brspf(y, model, x_init)
     return output.log_evidence+log_prior
-
 
 # PART 3: PARAMETER INFERENCE
 if __name__ == '__main__':
@@ -122,11 +70,11 @@ if __name__ == '__main__':
     log_pi = lambda x: pool.map(log_likelihood_per_sample, x)
     # Define the sampler parameters
     dim = 6  # dimension of the unknown parameter
-    N = 500  # number of samples per proposal
+    N = 200  # number of samples per proposal
     I = 50  # number of iterations
-    N_w = 100  # number of samples per proposal (warm-up period)
+    N_w = 50  # number of samples per proposal (warm-up period)
     I_w = 200   # number of iterations (warm-up period)
-    D = 5      # number of proposals
+    D = 7      # number of proposals
     var_0 = 1e-1   # initial variance
     eta_loc = 5e-2  # learning rate for the mean
     eta_scale = 5e-2    # learning rate for the covariance matrix
@@ -136,9 +84,9 @@ if __name__ == '__main__':
     for j in range(D):
         mu_init[j, 0] = np.random.uniform(-2, -0.5)
         sig_init[j, 0, 0] = var_0
-        mu_init[j, 1] = np.random.uniform(1, 2)
+        mu_init[j, 1] = np.random.uniform(-0.5, 0)
         sig_init[j, 1, 1] = var_0
-        mu_init[j, 2] = np.random.uniform(-1, 0)
+        mu_init[j, 2] = np.random.uniform(1, 2)
         sig_init[j, 2, 2] = var_0
         mu_init[j, 3] = np.random.uniform(-0.5, 0)
         sig_init[j, 3, 3] = var_0

@@ -125,6 +125,9 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weight
             log_weights[start:stop] = log_target_eval[start:stop] - log_prop
             # Compute evidence lower bound diagnostic
             elbo = np.mean(log_weights[start:stop])
+        # Estimate the evidence
+        log_z = max(log_weights[0:stop]) + np.log(np.mean(np.exp(log_weights[0:stop]-max(log_weights[0:stop]))))
+        log_evidence[i] = log_z
 
         # Smoothing of the importance weights (in log domain)
         if weight_smoothing:
@@ -140,10 +143,6 @@ def ais(log_target, d, mu, sig, samp_per_prop=100, iter_num=100, temporal_weight
         # Compute ESS
         weights_norm = weights / np.sum(weights)
         ess = np.sum(weights_norm**2)**(-1)
-
-        # Estimate the evidence
-        log_z = max_log_weight + np.log(np.mean(weights))
-        log_evidence[i] = log_z
 
         # Compute estimate of the target mean
         target_mean[i] = np.average(particles[0:stop, :], axis=0, weights=weights)
