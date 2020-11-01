@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.stats as sp
 
+
 class AgeStructuredModel:
     """
     A class which contains all necessary methods for analyzing an age-structured model for penguin colonies. Objects are
@@ -70,7 +71,7 @@ class AgeStructuredModel:
         # Compute the total number of chicks
         ct_old = np.sum(x_old[-(self.num_stages-2):], axis=0)
         # From total number of chicks to state 1 adults
-        log_transition += sp.binom.logpmf(x[0], ct_old, p=self.juvenile_survival)
+        log_transition += sp.binom.logpmf(x[0], (ct_old/2).astype(int), p=self.juvenile_survival)
         # Remainder of cycle
         for j in range(self.num_stages-1):
             # Propagate adults first
@@ -100,7 +101,7 @@ class AgeStructuredModel:
             num_samples = np.shape(x)[1]
             y = np.zeros((2, num_samples))
         # Extract the total number of breeders and chicks
-        st = np.sum(x[self.num_stages:], axis=0)         # total number of breeders
+        st = np.sum(x[2:self.num_stages], axis=0)         # total number of breeders
         ct = np.sum(x[-(self.num_stages-2):], axis=0)    # total number of chicks
         # Generate observations
         y[0] = np.random.normal(loc=st, scale=np.sqrt(self.variance_adults)*st)
@@ -123,9 +124,11 @@ class AgeStructuredModel:
             num_samples = np.shape(x)[1]
             log_observation = np.zeros(num_samples)
         # Extract the total number of breeders and chicks
-        st = np.sum(x[self.num_stages:], axis=0)            # total number of breeders
-        ct = np.sum(x[-(self.num_stages - 2):], axis=0)     # total number of chicks
-        # Generate observations
-        log_observation += sp.norm.logpdf(y[0], loc=st, scale=np.sqrt(self.variance_adults)*st)
-        log_observation += sp.norm.logpdf(y[1], loc=ct, scale=np.sqrt(self.variance_chicks)*ct)
+        st = np.sum(x[2:self.num_stages], axis=0)            # total number of breeders
+        ct = np.sum(x[-(self.num_stages-2):], axis=0)     # total number of chicks
+        # Evaluate log pdf of the observations
+        if ~np.isnan(y[0]):
+            log_observation += sp.norm.logpdf(y[0], loc=st, scale=np.sqrt(self.variance_adults)*st)
+        if ~np.isnan(y[1]):
+            log_observation += sp.norm.logpdf(y[1], loc=ct, scale=np.sqrt(self.variance_chicks)*ct)
         return log_observation
