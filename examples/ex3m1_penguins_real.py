@@ -6,6 +6,7 @@ import seaborn as sns
 from applications import penguins
 from monte_carlo_tools import pf
 from monte_carlo_tools import ais
+from scipy.io import loadmat
 
 
 ## DEFINITIONS
@@ -26,80 +27,19 @@ np.random.seed(1)
 #   -param[5] - probability of bad year
 #   -param[6] - variance of observations (breeders)
 #   -param[7] - variance of observations (chicks)
-param = np.array([0.35, 0.875, -0.8, -0.3, 0.2, 0.1, 0.01, 0.01])
 
+
+# PART 1: LOAD THE DATA
+data = loadmat('Group1data.mat')
+y = data['y']
+# Swap the axes to make appropriate size
+y = y.swapaxes(0, 2).swapaxes(1, 2)
+num_sites = np.shape(y)[0]
 # Number of stages to use for model
 num_stages = 5
-
-# Number of sites to simulate data for
-num_sites = 3
-# Define the list of candidate models
-candidate_models = [penguins.AgeStructuredModel(psi_juv=param[0], psi_adu=param[1], alpha_r=param[2], beta_r=param[4],
-                                                var_s=param[6], var_c=param[7], nstage=num_stages),
-                    penguins.AgeStructuredModel(psi_juv=param[0], psi_adu=param[1], alpha_r=param[3], beta_r=param[4],
-                                                var_s=param[6], var_c=param[7], nstage=num_stages)]
-
-# Define the regime dynamics
-regime_dynamics_rand = lambda model_idx, num_samp: np.random.choice(np.arange(start=0, stop=2), num_samp,
-                                                                    replace=True, p=np.array([param[5], 1-param[5]]))
-regime_dynamics_log_pdf = lambda model_idx: model_idx*np.log(1-param[5])+(1-model_idx)*np.log(param[5])
-
-
-# Create a multiple regime SSM and generate synthetic data
-model = pf.MultiRegimeSSM(candidate_models, regime_dynamics_rand, regime_dynamics_log_pdf)
-
-# Determine initial states
-x_init = np.random.randint(low=500, high=2000, size=(num_sites, 2*num_stages-2))
-
-# Determine length of time to generate data for
-time_generate = 60
-
-# Burn-in the first X number of points to make sure time-series has stabilized
-cut_off = 20
-time_length = time_generate-cut_off
-
-# Percentage of missing data
-missing_percent_adults = 0.3
-missing_percent_chicks = 0.3
-num_remove_adults = int(missing_percent_adults*time_length)
-num_remove_chicks = int(missing_percent_chicks*time_length)
-
-# Initialize arrays to store data, states, and model indices
-y = np.zeros((num_sites, time_length, 2))
-x = np.zeros((num_sites, time_length+1, 2*num_stages-2))
-m_idx = np.zeros((num_sites, time_length))
-
-# Generate ground truth for the regime switching system
-for k in range(num_sites):
-    # Generate the full dataset
-    y_temp, x_temp, m_idx_temp = model.generate_data(init_state=x_init[0], T=time_generate)
-    # Cutoff points and store into arrays
-    y[k] = y_temp[-time_length:]
-    x[k] = x_temp[-(time_length+1):]
-    m_idx[k] = m_idx_temp[-time_length:]
-    # Draw the indices for the data to be removed
-    idx1 = np.random.choice(time_length, num_remove_adults, replace=False)
-    idx2 = np.random.choice(time_length, num_remove_chicks, replace=False)
-    # Force those observations to be nans
-    y[k, idx1, 0] = np.nan
-    y[k, idx2, 1] = np.nan
-
-
-# Plot the generated observations
-plt.figure()
-plt.plot(y[0, :, 0])
-plt.plot(y[0, :, 1])
-plt.legend(['Observed sum of adults', 'Observed sum of chicks'])
-plt.show()
-
-# # Extract age distribution
-# age_distribution = x[:, :num_stages]/np.repeat(np.reshape(np.sum(x[:, :num_stages], axis=1),
-#                                                           (-1, np.shape(x)[0])).T, num_stages, axis=1)
-
-# Save data in a numpy array
-np.savez('simulated_data.npz', param=param, num_stages=num_stages, num_sites=num_sites, x_init=x_init,
-         x=x, y=y, m_idx=m_idx)
-
+# Determine start year and end year for each site
+start_year = [0, 0, 3]
+end_year = [28, 34, 38]
 
 # PART 2: ASSUMED MODEL
 # Prior parameters
@@ -139,20 +79,34 @@ def log_likelihood_per_sample(input_parameters):
     # Initialize log joint as log prior
     log_joint = log_prior
     # Create the model (assuming the noise variances are known)
-    regimes = [penguins.AgeStructuredModel(psi_juv=z[0], psi_adu=z[1], alpha_r=z[2], beta_r=z[4], var_s=param[6],
-                                          var_c=param[7], nstage=num_stages),
-               penguins.AgeStructuredModel(psi_juv=z[0], psi_adu=z[1], alpha_r=z[2]+z[3], beta_r=z[4], var_s=param[6],
-                                    var_c=param[7], nstage=num_stages)]
+    regimes = [penguins.AgeStructuredModel(psi_juv=z[0], psi_adu=z[1], alpha_r=z[2], beta_r=z[4], var_s=0.01,
+                                           var_c=0.01, nstage=num_stages),
+               penguins.AgeStructuredModel(psi_juv=z[0], psi_adu=z[1], alpha_r=z[2]+z[3], beta_r=z[4], var_s=0.01,
+                                           var_c=0.01, nstage=num_stages)]
     draw_regimes = lambda model_idx, num_samp: np.random.choice(np.arange(start=0, stop=2), num_samp, replace=True,
                                                                         p=np.array([z[5], 1 - z[5]]))
     regimes_log_pdf = lambda model_idx: model_idx*np.log(1-z[5])+(1-model_idx)*np.log(z[5])
     # Create regime switching system
     model = pf.MultiRegimeSSM(regimes, draw_regimes, regimes_log_pdf)
     for k in range(num_sites):
+        # Modify the time series to be analyzed
+        y_current = y[k, start_year[k]:end_year[k]+1, :]
+        # Obtain the initial states
+        initial_states = np.zeros(2*num_stages-2)
+        if np.isnan(y_current[0, 0]):
+            initial_states[:num_stages] = y_current[0, 1] * np.array([0.37, 0.29, 0.23, 0.18, 0.61])
+        else:
+            initial_states[:num_stages] = y_current[0, 0] * np.array([0.37, 0.29, 0.23, 0.18, 0.61])
+        if np.isnan(y_current[0, 1]):
+            initial_states[-(num_stages - 2):] = y_current[0, 0]*np.array([0.23, 0.18, 0.60])
+        else:
+            initial_states[-(num_stages - 2):] = y_current[0, 0]*np.array([0.23, 0.18, 0.60])
+        # Error for particles
+        err = int(0.01*np.mean(initial_states))
         # Draw the initial particles
-        init_particles = np.array([x[k, 0]]).T+np.random.randint(low=-1, high=1, size=(2*num_stages-2, num_particles))
+        init_particles = np.array([initial_states]).T+np.random.randint(low=-err, high=err, size=(2*num_stages-2, num_particles))
         # Run the particle filter and return the log-likelihood
-        output = pf.brspf(y[k], model, init_particles)
+        output = pf.brspf(y_current, model, init_particles)
         # Update the log joint
         log_joint += output.log_evidence
     return log_joint
@@ -241,7 +195,7 @@ if __name__ == '__main__':
         # Plot the posterior
         plt.figure()
         plt.hist(theta[:, i])
-        plt.axvline(param[i])
+        # plt.axvline(param[i])
         plt.xlabel(labels[i])
         # Compute the overlap
         # 1. First get a KDE
