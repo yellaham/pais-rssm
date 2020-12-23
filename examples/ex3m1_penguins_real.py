@@ -48,20 +48,20 @@ beta_juv0 = 3
 alpha_adu0 = 3              # Adult survival prior
 beta_adu0 = 3
 mu_int_pb0 = 0              # Breeding success (intercept in logit) prior - bad year
-var_int_pb0 = 1
+var_int_pb0 = 2
 alpha_diff0 = 0.001         # Difference in logit intercepts for breeding success (good year-bad year) prior
 beta_diff0 = 0.001
-mu_slope_pb0 = 0.2          # Breeding success (slope in logit) prior
-var_slope_pb0 = 0.2
+mu_slope_pb0 = 0.15         # Breeding success (slope in logit) prior
+var_slope_pb0 = 0.01
 alpha_gamma0 = 1            # Probability of bad year of breeding success prior
-beta_gamma0 = 9
+beta_gamma0 = 1
 
 # Likelihood function
 def log_likelihood_per_sample(input_parameters):
     # Set the random seed
     np.random.seed()
     # Define the number of particles
-    num_particles = 1500
+    num_particles = 500
     # Apply relevant transformations to the sample (sigmoid transformation to probability parameters)
     z = np.copy(input_parameters)
     z[0] = 1/(1+np.exp(-z[0]))
@@ -127,11 +127,11 @@ if __name__ == '__main__':
     N = 200  # number of samples per proposal
     I = 50  # number of iterations
     N_w = 50  # number of samples per proposal (warm-up period)
-    I_w = 200   # number of iterations (warm-up period)
+    I_w = 150   # number of iterations (warm-up period)
     D = 10      # number of proposals
     var_0 = 1e-1   # initial variance
-    eta_loc = 1e-1  # learning rate for the mean
-    eta_scale = 1e-1    # learning rate for the covariance matrix
+    eta_loc = 2e-1  # learning rate for the mean
+    eta_scale = 2e-1    # learning rate for the covariance matrix
     # Select initial proposal parameters
     mu_init = np.zeros((D, dim))
     sig_init = np.zeros((D, dim, dim))
@@ -141,22 +141,22 @@ if __name__ == '__main__':
         mu_init[j, 0] = np.log(mu_init[j, 0]/(1-mu_init[j, 0]))
         sig_init[j, 0, 0] = var_0
         # Prior proposal parameters for adult survival
-        mu_init[j, 1] = np.random.uniform(0.70, 0.90)
+        mu_init[j, 1] = np.random.uniform(0.65, 0.95)
         mu_init[j, 1] = np.log(mu_init[j, 1]/(1-mu_init[j, 1]))
         sig_init[j, 1, 1] = var_0
         # Prior proposal parameters for logit intercept (bad year)
-        mu_init[j, 2] = np.random.uniform(-1, -0.5)
+        mu_init[j, 2] = np.random.uniform(-2, -0.5)
         sig_init[j, 2, 2] = var_0
         # Prior proposal parameters for difference in logit intercepts
-        mu_init[j, 3] = np.random.uniform(0, 0.5)
+        mu_init[j, 3] = np.random.uniform(0, 1)
         mu_init[j, 3] = np.log(mu_init[j, 3])
         sig_init[j, 3, 3] = var_0
         # Prior proposal parameters for logit slope
-        mu_init[j, 4] = np.random.uniform(0, 0.3)
+        mu_init[j, 4] = np.random.uniform(0.05, 0.3)
         mu_init[j, 4] = np.log(mu_init[j, 4])
         sig_init[j, 4, 4] = var_0
         # Prior proposal parameters for probability of a bad year
-        mu_init[j, 5] = np.random.uniform(0.05, 0.30)
+        mu_init[j, 5] = np.random.uniform(0.05, 0.40)
         mu_init[j, 5] = np.log(mu_init[j, 5]/(1-mu_init[j, 5]))
         sig_init[j, 5, 5] = var_0
     # Warm up the sampler by running it for some number of iterations
