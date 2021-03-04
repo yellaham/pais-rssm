@@ -112,9 +112,9 @@ var_int_pb0 = 1
 alpha_diff0 = 0.001         # Difference in logit intercepts for breeding success (good year-bad year) prior
 beta_diff0 = 0.001
 mu_slope_pb0 = 0.2          # Breeding success (slope in logit) prior
-var_slope_pb0 = 0.2
+var_slope_pb0 = 0.01
 alpha_gamma0 = 1            # Probability of bad year of breeding success prior
-beta_gamma0 = 9
+beta_gamma0 = 1
 
 # Likelihood function
 def log_likelihood_per_sample(input_parameters):
