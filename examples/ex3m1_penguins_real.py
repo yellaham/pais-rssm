@@ -30,16 +30,16 @@ np.random.seed(1)
 
 
 # PART 1: LOAD THE DATA
-data = loadmat('Group1data.mat')
-y = data['y']
+data = loadmat('Group2data.mat')
+y = np.array([data['y']])
 # Swap the axes to make appropriate size
-y = y.swapaxes(0, 2).swapaxes(1, 2)
+# y = y.swapaxes(0, 2).swapaxes(1, 2)
 num_sites = np.shape(y)[0]
 # Number of stages to use for model
 num_stages = 5
 # Determine start year and end year for each site
-start_year = [0, 0, 3]
-end_year = [28, 34, 38]
+start_year = [0] #[0, 0, 3]
+end_year = [20] #[28, 34, 38]
 
 # PART 2: ASSUMED MODEL
 # Prior parameters
@@ -49,62 +49,74 @@ alpha_adu0 = 3              # Adult survival prior
 beta_adu0 = 3
 mu_int_pb0 = 0              # Breeding success (intercept in logit) prior - bad year
 var_int_pb0 = 1
-alpha_diff0 = 0.001         # Difference in logit intercepts for breeding success (good year-bad year) prior
-beta_diff0 = 0.001
-mu_slope_pb0 = 0.2          # Breeding success (slope in logit) prior
-var_slope_pb0 = 0.2
-alpha_gamma0 = 1            # Probability of bad year of breeding success prior
-beta_gamma0 = 9
+alpha_diff0 = 0.0001         # Difference in logit intercepts for breeding success (good year-bad year) prior
+beta_diff0 = 0.0001
+mu_slope_pb0 = 0.15          # Breeding success (slope in logit) prior
+var_slope_pb0 = 0.01
+mu_im_rate = 25
+var_im_rate = 100
+#alpha_gamma0 = 3            # Probability of bad year of breeding success prior
+#beta_gamma0 = 3
+count_err = 0.1             # Percent error in the counts
+var_err = count_err**2
 
 # Likelihood function
 def log_likelihood_per_sample(input_parameters):
     # Set the random seed
     np.random.seed()
     # Define the number of particles
-    num_particles = 1500
+    num_particles = 1000
     # Apply relevant transformations to the sample (sigmoid transformation to probability parameters)
     z = np.copy(input_parameters)
     z[0] = 1/(1+np.exp(-z[0]))
     z[1] = 1/(1+np.exp(-z[1]))
     z[3] = np.exp(z[3])
     z[4] = np.exp(z[4])
-    z[5] = 1/(1+np.exp(-z[5]))
+    # z[5] = 1/(1+np.exp(-z[5]))
     # Evaluate prior distribution at transformed samples (don't forget to factor in Jacobian from transformation)
     log_prior = log_jacobian_sigmoid(input_parameters[0])+sp.beta.logpdf(z[0], alpha_juv0, beta_juv0)
     log_prior += log_jacobian_sigmoid(input_parameters[1])+sp.beta.logpdf(z[1], alpha_adu0, beta_adu0)
     log_prior += sp.norm.logpdf(z[2], mu_int_pb0, np.sqrt(var_int_pb0))
-    log_prior += input_parameters[3]+sp.invgamma.logpdf(z[3], a=alpha_diff0, scale=beta_diff0)
-    log_prior += input_parameters[4]+sp.norm.logpdf(z[4], mu_slope_pb0, np.sqrt(var_slope_pb0))
-    log_prior += log_jacobian_sigmoid(input_parameters[5])+sp.beta.logpdf(z[5], alpha_gamma0, beta_gamma0)
+    # log_prior += input_parameters[3]+sp.invgamma.logpdf(z[3], a=alpha_diff0, scale=beta_diff0)
+    log_prior += input_parameters[3]+sp.norm.logpdf(z[3], mu_slope_pb0, np.sqrt(var_slope_pb0))
+    log_prior += input_parameters[4]+sp.norm.logpdf(z[4], mu_im_rate, np.sqrt(var_im_rate))
+    # log_prior += log_jacobian_sigmoid(input_parameters[5])+sp.beta.logpdf(z[5], alpha_gamma0, beta_gamma0)
     # Initialize log joint as log prior
     log_joint = log_prior
     # Create the model (assuming the noise variances are known)
-    regimes = [penguins.AgeStructuredModel(psi_juv=z[0], psi_adu=z[1], alpha_r=z[2], beta_r=z[4], var_s=0.01,
-                                           var_c=0.01, nstage=num_stages),
-               penguins.AgeStructuredModel(psi_juv=z[0], psi_adu=z[1], alpha_r=z[2]+z[3], beta_r=z[4], var_s=0.01,
-                                           var_c=0.01, nstage=num_stages)]
-    draw_regimes = lambda model_idx, num_samp: np.random.choice(np.arange(start=0, stop=2), num_samp, replace=True,
-                                                                        p=np.array([z[5], 1 - z[5]]))
-    regimes_log_pdf = lambda model_idx: model_idx*np.log(1-z[5])+(1-model_idx)*np.log(z[5])
+    regimes = [penguins.AgeStructuredModel(psi_juv=z[0], psi_adu=z[1], alpha_r=z[2], beta_r=z[3], var_s=var_err,
+                                           var_c=var_err, nstage=num_stages, phi=z[4], immigration=True)]
+    draw_regimes = lambda model_idx, num_samp: np.random.choice(np.arange(start=0, stop=1), num_samp, replace=True,
+                                                                p=np.array([1]))
+    regimes_log_pdf = lambda model_idx: (1-model_idx)*np.log(1)
+    # Create the model (assuming the noise variances are known)
+    # regimes = [penguins.AgeStructuredModel(psi_juv=z[0], psi_adu=z[1], alpha_r=z[2], beta_r=z[4], var_s=var_err,
+    #                                        var_c=var_err, nstage=num_stages),
+    #            penguins.AgeStructuredModel(psi_juv=z[0], psi_adu=z[1], alpha_r=z[2]+z[3], beta_r=z[4], var_s=var_err,
+    #                                        var_c=var_err, nstage=num_stages)]
+    # draw_regimes = lambda model_idx, num_samp: np.random.choice(np.arange(start=0, stop=2), num_samp, replace=True,
+    #                                                                     p=np.array([z[5], 1 - z[5]]))
+    # regimes_log_pdf = lambda model_idx: model_idx*np.log(1-z[5])+(1-model_idx)*np.log(z[5])
     # Create regime switching system
     model = pf.MultiRegimeSSM(regimes, draw_regimes, regimes_log_pdf)
     for k in range(num_sites):
         # Modify the time series to be analyzed
         y_current = y[k, start_year[k]:end_year[k]+1, :]
         # Obtain the initial states
-        initial_states = np.zeros(2*num_stages-2)
-        if np.isnan(y_current[0, 0]):
-            initial_states[:num_stages] = y_current[0, 1] * np.array([0.37, 0.29, 0.23, 0.18, 0.61])
-        else:
-            initial_states[:num_stages] = y_current[0, 0] * np.array([0.37, 0.29, 0.23, 0.18, 0.61])
-        if np.isnan(y_current[0, 1]):
-            initial_states[-(num_stages - 2):] = y_current[0, 0]*np.array([0.23, 0.18, 0.60])
-        else:
-            initial_states[-(num_stages - 2):] = y_current[0, 0]*np.array([0.23, 0.18, 0.60])
+        initial_states = 10*np.ones(2*num_stages-2)
+        # if np.isnan(y_current[0, 0]):
+        #     initial_states[:num_stages] = y_current[0, 1] * np.array([0.37, 0.29, 0.23, 0.18, 0.61])
+        # else:
+        #     initial_states[:num_stages] = y_current[0, 0] * np.array([0.37, 0.29, 0.23, 0.18, 0.61])
+        # if np.isnan(y_current[0, 1]):
+        #     initial_states[-(num_stages - 2):] = y_current[0, 0]*np.array([0.23, 0.18, 0.60])
+        # else:
+        #     initial_states[-(num_stages - 2):] = y_current[0, 0]*np.array([0.23, 0.18, 0.60])
         # Error for particles
-        err = int(0.01*np.mean(initial_states))
+        err = 5 #int(0.1*np.mean(initial_states))
         # Draw the initial particles
-        init_particles = np.array([initial_states]).T+np.random.randint(low=-err, high=err, size=(2*num_stages-2, num_particles))
+        init_particles = np.array([initial_states]).T+np.random.randint(low=-err, high=err,
+                                                                        size=(2*num_stages-2, num_particles))
         # Run the particle filter and return the log-likelihood
         output = pf.brspf(y_current, model, init_particles)
         # Update the log joint
@@ -123,7 +135,7 @@ if __name__ == '__main__':
     # Define the target distribution
     log_pi = lambda x: pool.map(log_likelihood_per_sample, x)
     # Define the sampler parameters
-    dim = 6  # dimension of the unknown parameter
+    dim = 5  # dimension of the unknown parameter
     N = 200  # number of samples per proposal
     I = 50  # number of iterations
     N_w = 50  # number of samples per proposal (warm-up period)
@@ -148,17 +160,17 @@ if __name__ == '__main__':
         mu_init[j, 2] = np.random.uniform(-1, -0.5)
         sig_init[j, 2, 2] = var_0
         # Prior proposal parameters for difference in logit intercepts
-        mu_init[j, 3] = np.random.uniform(0, 0.5)
+        mu_init[j, 3] = np.random.uniform(0, 0.3)
         mu_init[j, 3] = np.log(mu_init[j, 3])
         sig_init[j, 3, 3] = var_0
         # Prior proposal parameters for logit slope
-        mu_init[j, 4] = np.random.uniform(0, 0.3)
+        mu_init[j, 4] = np.random.uniform(10, 40)
         mu_init[j, 4] = np.log(mu_init[j, 4])
         sig_init[j, 4, 4] = var_0
-        # Prior proposal parameters for probability of a bad year
-        mu_init[j, 5] = np.random.uniform(0.05, 0.30)
-        mu_init[j, 5] = np.log(mu_init[j, 5]/(1-mu_init[j, 5]))
-        sig_init[j, 5, 5] = var_0
+        # # Prior proposal parameters for probability of a bad year
+        # mu_init[j, 5] = np.random.uniform(0.05, 0.30)
+        # mu_init[j, 5] = np.log(mu_init[j, 5]/(1-mu_init[j, 5]))
+        # sig_init[j, 5, 5] = var_0
     # Warm up the sampler by running it for some number of iterations
     init_sampler = ais.ais(log_target=log_pi, d=dim, mu=mu_init, sig=sig_init, samp_per_prop=N_w, iter_num=I_w,
                            temporal_weights=False, weight_smoothing=True, eta_mu0=eta_loc, eta_sig0=eta_scale,
@@ -172,12 +184,12 @@ if __name__ == '__main__':
     # Apply transformations to the samples
     theta[:, 0] = 1/(1+np.exp(-theta[:, 0]))
     theta[:, 1] = 1/(1+np.exp(-theta[:, 1]))
-    theta[:, 3] = theta[:, 2] + np.exp(theta[:, 3])
+    # theta[:, 3] = theta[:, 2] + np.exp(theta[:, 3])
+    theta[:, 3] = np.exp(theta[:, 3])
     theta[:, 4] = np.exp(theta[:, 4])
-    theta[:, 5] = 1/(1+np.exp(-theta[:, 5]))
+    # theta[:, 5] = 1/(1+np.exp(-theta[:, 5]))
     # Create labels for each parameter
-    labels = ['Juvenile Survival', 'Adult Survival', 'Logit Intercept (Bad)', 'Logit Intercept (Good)', 'Logit Slope',
-              'Probability of Bad Year']
+    labels = ['Juvenile Survival', 'Adult Survival', 'Logit Intercept', 'Logit Slope', 'Immigration Rate']
     # Matrix plot of the approximated target distribution
     plt.figure()
     count = 1
@@ -209,12 +221,14 @@ if __name__ == '__main__':
             g_hat = sp.beta.logpdf(theta[:, i], alpha_adu0, beta_adu0)
         elif i == 2:
             g_hat = sp.norm.logpdf(theta[:, i], mu_int_pb0, np.sqrt(var_int_pb0))
+        # elif i == 3:
+        #     g_hat = sp.invgamma.logpdf(theta[:, i]-theta[:, i-1], a=alpha_diff0, scale=beta_diff0)
         elif i == 3:
-            g_hat = sp.invgamma.logpdf(theta[:, i]-theta[:, i-1], a=alpha_diff0, scale=beta_diff0)
-        elif i == 4:
             g_hat = sp.norm.logpdf(theta[:, i], mu_slope_pb0, np.sqrt(var_slope_pb0))
-        elif i == 5:
-            g_hat = sp.beta.logpdf(theta[:, i], alpha_gamma0, beta_gamma0)
+        elif i == 4:
+            g_hat = sp.norm.logpdf(theta[:, i], mu_im_rate, np.sqrt(var_im_rate))
+        # elif i == 5:
+        #     g_hat = sp.beta.logpdf(theta[:, i], alpha_gamma0, beta_gamma0)
         # 4. Evaluate the min function
         min_eval = np.minimum(np.exp(g_hat-f_hat), 1)
         # 5. Compute the overlap by taking a Monte Carlo average

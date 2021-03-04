@@ -7,16 +7,18 @@ class AgeStructuredModel:
     A class which contains all necessary methods for analyzing an age-structured model for penguin colonies. Objects are
     initialized by the number of assumed adult stages and the demographic parameters.
     """
-    def __init__(self, psi_juv, psi_adu, alpha_r, beta_r, var_s, var_c, nstage=5):
+    def __init__(self, psi_juv, psi_adu, alpha_r, beta_r, var_s, var_c, nstage=5, phi=None, immigration=False):
         self.juvenile_survival = psi_juv
         self.adult_survival = psi_adu
         self.reproductive_success_bias = alpha_r
         self.reproductive_success_slope = beta_r
+        self.immigration_rate = phi
         self.variance_adults = var_s
         self.variance_chicks = var_c
         self.num_stages = nstage
-        logit_rates = self.reproductive_success_bias+self.reproductive_success_slope*np.linspace(0, self.num_stages-1,
-                                                                                              self.num_stages)
+        self.immigration = immigration
+        logit_rates = (self.reproductive_success_bias
+                       + self.reproductive_success_slope*np.linspace(0, self.num_stages-1, self.num_stages))
         self.reproductive_rates = 1./(1.+np.exp(-logit_rates))
 
     def transition_rand(self, x_old):
@@ -45,6 +47,9 @@ class AgeStructuredModel:
             # Propagate adults first
             if j < self.num_stages-2:
                 x[j+1] = np.random.binomial(x_old[j].astype(int), self.adult_survival)
+                if j == 2 and self.immigration:
+                    x[j+1] = (np.random.binomial(x_old[j].astype(int), self.adult_survival)
+                              + np.random.poisson(self.immigration_rate, num_samples))
             else:
                 x[j+1] = np.random.binomial((x_old[j] + x_old[j+1]).astype(int), self.adult_survival)
             # Obtain the chicks for the penguins that can breed
