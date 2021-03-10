@@ -48,10 +48,9 @@ class AgeStructuredModel:
             if j < self.num_stages-2:
                 x[j+1] = np.random.binomial(x_old[j].astype(int), self.adult_survival)
                 if j == 2 and self.immigration:
-                    x[j+1] = (np.random.binomial(x_old[j].astype(int), self.adult_survival)
-                              + np.random.poisson(self.immigration_rate, num_samples))
+                    x[j+1] += np.random.poisson(self.immigration_rate, num_samples)
             else:
-                x[j+1] = np.random.binomial((x_old[j] + x_old[j+1]).astype(int), self.adult_survival)
+                x[j+1] = np.random.binomial((x_old[j]+x_old[j+1]).astype(int), self.adult_survival)
             # Obtain the chicks for the penguins that can breed
             if j >= 1:
                 # Chicks obtained = binomial draw
